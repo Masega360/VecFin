@@ -6,7 +6,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go&logoColor=white)](https://golang.org)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat&logo=docker&logoColor=white)](https://docker.com)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
+[![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red?style=flat)](LICENSE)
 
 </div>
 
@@ -173,6 +173,5 @@ La especificación completa de casos de uso está en `/docs/VecFin_Casos_de_Uso.
 
 <div align="center">
 
-© 2025 VecFin — Proyecto académico / en desarrollo / Derechos Reservados
-
+© 2025 VecFin — Todos los derechos reservados. Queda prohibida la reproducción, distribución o uso del código sin autorización expresa de los autores.
 </div>
