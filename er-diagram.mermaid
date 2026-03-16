@@ -1,0 +1,143 @@
+erDiagram
+    USUARIO {
+        uuid id PK
+        string nombre
+        string apellido
+        string email
+        string contrasena_hash
+        string ubicacion
+        string perfil_riesgo
+        timestamp fecha_registro
+        timestamp ultimo_acceso
+    }
+    PLATAFORMA {
+        uuid id PK
+        string nombre
+        string tipo
+    }
+    USUARIO_PLATAFORMA {
+        uuid id PK
+        uuid usuario_id FK
+        uuid plataforma_id FK
+        boolean activa
+        timestamp fecha_vinculacion
+    }
+    ACTIVO {
+        uuid id PK
+        string nombre
+        string simbolo
+        string tipo
+        decimal precio_actual
+    }
+    CARTERA {
+        uuid id PK
+        uuid usuario_id FK
+        string nombre
+    }
+    CARTERA_ACTIVO {
+        uuid id PK
+        uuid cartera_id FK
+        uuid activo_id FK
+        decimal cantidad
+        decimal precio_promedio
+    }
+    TRANSACCION {
+        uuid id PK
+        uuid usuario_id FK
+        uuid activo_id FK
+        uuid plataforma_id FK
+        string tipo
+        decimal monto
+        decimal cantidad
+        timestamp fecha
+    }
+    DIAGNOSTICO_IA {
+        uuid id PK
+        uuid usuario_id FK
+        string tipo
+        text contenido
+        timestamp fecha
+    }
+    COMUNIDAD {
+        uuid id PK
+        uuid creador_id FK
+        string nombre
+        string descripcion
+        string tipo
+        string logo_url
+        timestamp fecha_creacion
+    }
+    USUARIO_COMUNIDAD {
+        uuid id PK
+        uuid usuario_id FK
+        uuid comunidad_id FK
+        string rol
+        timestamp fecha_union
+    }
+    TEMA {
+        uuid id PK
+        uuid comunidad_id FK
+        string nombre
+    }
+    PUBLICACION {
+        uuid id PK
+        uuid usuario_id FK
+        uuid comunidad_id FK
+        string titulo
+        text descripcion
+        string tipo
+        timestamp fecha
+    }
+    COMENTARIO {
+        uuid id PK
+        uuid publicacion_id FK
+        uuid usuario_id FK
+        text contenido
+        timestamp fecha
+    }
+    LIKE {
+        uuid id PK
+        uuid publicacion_id FK
+        uuid usuario_id FK
+        timestamp fecha
+    }
+    NOTICIA {
+        uuid id PK
+        string titulo
+        string resumen
+        string url
+        timestamp fecha
+    }
+    PUBLICACION_NOTICIA {
+        uuid publicacion_id FK
+        uuid noticia_id FK
+    }
+    SEGUIMIENTO {
+        uuid id PK
+        uuid seguidor_id FK
+        uuid seguido_id FK
+        timestamp fecha
+    }
+
+    USUARIO ||--o{ USUARIO_PLATAFORMA : "vincula"
+    PLATAFORMA ||--o{ USUARIO_PLATAFORMA : "tiene"
+    USUARIO ||--o{ CARTERA : "posee"
+    CARTERA ||--o{ CARTERA_ACTIVO : "incluye"
+    ACTIVO ||--o{ CARTERA_ACTIVO : "forma parte de"
+    USUARIO ||--o{ TRANSACCION : "realiza"
+    ACTIVO ||--o{ TRANSACCION : "involucra"
+    PLATAFORMA ||--o{ TRANSACCION : "ejecutada en"
+    USUARIO ||--o{ DIAGNOSTICO_IA : "recibe"
+    USUARIO ||--o{ COMUNIDAD : "crea"
+    USUARIO ||--o{ USUARIO_COMUNIDAD : "integra"
+    COMUNIDAD ||--o{ USUARIO_COMUNIDAD : "agrupa"
+    COMUNIDAD ||--o{ TEMA : "organiza"
+    COMUNIDAD ||--o{ PUBLICACION : "contiene"
+    USUARIO ||--o{ PUBLICACION : "publica"
+    PUBLICACION ||--o{ COMENTARIO : "recibe"
+    USUARIO ||--o{ COMENTARIO : "comenta"
+    PUBLICACION ||--o{ LIKE : "acumula"
+    USUARIO ||--o{ LIKE : "da"
+    PUBLICACION ||--o{ PUBLICACION_NOTICIA : "adjunta"
+    NOTICIA ||--o{ PUBLICACION_NOTICIA : "referenciada en"
+    USUARIO ||--o{ SEGUIMIENTO : "sigue a"
