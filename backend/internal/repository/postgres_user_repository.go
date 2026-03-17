@@ -21,17 +21,32 @@ func (r *PostgresUserRepository) Create(user domain.User) error {
 	return err
 }
 
-func (r *PostgresUserRepository) GetByID(id uuid.UUID) (domain.User, error) {
-	// Implementation for getting a user by ID from PostgreSQL
-	return domain.User{}, nil
+func (r *PostgresUserRepository) Read(id uuid.UUID) (domain.User, error) {
+	_, err := r.db.Exec(
+		"SELECT * FROM users WHERE id = $1",
+		id,
+	)
+	return domain.User{}, err
 }
 
 func (r *PostgresUserRepository) Update(id uuid.UUID, user domain.User) error {
 	// Implementation for updating a user in PostgreSQL
-	return nil
+	_, err := r.db.Exec(
+		"UPDATE users SET first_name = $2, last_name = $3, email = $4, password_hash = $5, risk_type = $6 WHERE id = $1",
+		id,
+		user.FirstName,
+		user.LastName,
+		user.Email,
+		user.PasswordHash,
+		user.RiskType,
+	)
+	return err
 }
 
 func (r *PostgresUserRepository) Delete(id uuid.UUID) error {
-	// Implementation for deleting a user from PostgreSQL
-	return nil
+	_, err := r.db.Exec(
+		"DELETE FROM users WHERE id = $1",
+		id,
+	)
+	return err
 }
