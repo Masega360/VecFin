@@ -9,6 +9,6 @@ type UUID = uuid.UUID
 type UserRepository interface {
 	Create(user User) error
 	Read(id UUID) (User, error)
-	Update(id UUID, user User) error
+	Update(user User) error
 	Delete(id UUID) error
 }

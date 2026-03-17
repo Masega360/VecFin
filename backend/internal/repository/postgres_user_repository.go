@@ -8,6 +8,10 @@ type PostgresUserRepository struct {
 	db *sql.DB
 }
 
+func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
+	return &PostgresUserRepository{db: db}
+}
+
 func (r *PostgresUserRepository) Create(user domain.User) error {
 	_, err := r.db.Exec(
 		"INSERT INTO users (id, first_name, last_name, email, password_hash, risk_type) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -29,11 +33,11 @@ func (r *PostgresUserRepository) Read(id uuid.UUID) (domain.User, error) {
 	return domain.User{}, err
 }
 
-func (r *PostgresUserRepository) Update(id uuid.UUID, user domain.User) error {
+func (r *PostgresUserRepository) Update(user domain.User) error {
 	// Implementation for updating a user in PostgreSQL
 	_, err := r.db.Exec(
 		"UPDATE users SET first_name = $2, last_name = $3, email = $4, password_hash = $5, risk_type = $6 WHERE id = $1",
-		id,
+		user.ID,
 		user.FirstName,
 		user.LastName,
 		user.Email,
