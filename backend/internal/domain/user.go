@@ -1,4 +1,4 @@
-package domain
+package backend.internal.domain
 
 import (
 	
