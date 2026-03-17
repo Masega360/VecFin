@@ -1,11 +1,20 @@
 package backend.internal.repository
 
 type PostgresUserRepository struct {
+	db *sql.DB
 }
 
 func (r *PostgresUserRepository) Create(user User) error {
-	// Implementation for creating a user in PostgreSQL
-	return nil
+    _, err := r.db.Exec(
+        "INSERT INTO users (id, first_name, last_name, email, password_hash, risk_type) VALUES ($1, $2, $3, $4, $5, $6)",
+        user.ID,
+        user.FirstName,
+        user.LastName,
+        user.Email,
+        user.PasswordHash,
+        user.RiskType,
+    )
+    return err
 }
 
 func (r *PostgresUserRepository) GetByID(id UUID) (User, error) {

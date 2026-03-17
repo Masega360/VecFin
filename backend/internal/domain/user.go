@@ -1,16 +1,17 @@
-package backend.internal.domain
+package domain
 
 import (
-	
+	"github.com/google/uuid"
+	"time"
 )
 
 type User struct {
-	id UUID
-	first_name string
-	last_name string
-	email string
-	password_hash string
-	risk_profile riskType
-	registration_date timestamp
-	last_access timestamp
+	ID               uuid.UUID
+	FirstName        string
+	LastName         string
+	Email            string
+	PasswordHash     string
+	RiskType         string
+	RegistrationDate time.Time
+	LastAccess       time.Time
 }

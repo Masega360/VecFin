@@ -1,2 +1,3 @@
-type user_usecase {
-	
+type UserUsecase struct {
+	repo UserRepository
+}
