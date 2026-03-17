@@ -1,3 +1,5 @@
+package domain
+
 type Crud interface {
 	Create(entity interface{}) error
 	Read(id string) (entity interface{}, err error)
