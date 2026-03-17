@@ -1,2 +1,2 @@
-type user_usecase struct implemts Crud {
+type user_usecase {
 	
