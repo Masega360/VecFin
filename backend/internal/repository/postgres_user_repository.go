@@ -26,11 +26,23 @@ func (r *PostgresUserRepository) Create(user domain.User) error {
 }
 
 func (r *PostgresUserRepository) Read(id uuid.UUID) (domain.User, error) {
-	_, err := r.db.Exec(
-		"SELECT * FROM users WHERE id = $1",
+	var user domain.User
+
+	err := r.db.QueryRow(
+		`SELECT id, first_name, last_name, email, password_hash, COALESCE(risk_type, ''), registration_date 
+		 FROM users WHERE id = $1`,
 		id,
+	).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.PasswordHash,
+		&user.RiskType,
+		&user.RegistrationDate,
 	)
-	return domain.User{}, err
+
+	return user, err
 }
 
 func (r *PostgresUserRepository) Update(user domain.User) error {

@@ -16,11 +16,10 @@ func NewUserHandler(uc *usecase.UserUsecase) *UserHandler {
 }
 
 func (h *UserHandler) RegisterRoutes() {
-	http.HandleFunc("/users", h.Create)
-	http.HandleFunc("/users/", h.Read)
-	http.HandleFunc("/users/update/", h.Update)
-	http.HandleFunc("/users/delete/", h.Delete)
-	http.ListenAndServe(":8080", nil)
+	http.HandleFunc("POST /users", h.Create)
+	http.HandleFunc("GET /users/", h.Read)
+	http.HandleFunc("PUT /users/", h.Update)
+	http.HandleFunc("DELETE /users/", h.Delete)
 }
 
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {

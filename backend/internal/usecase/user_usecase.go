@@ -48,14 +48,16 @@ func (u *UserUsecase) Update(id, firstName, lastName, email string) error {
 		return err
 	}
 
-	user := domain.User{
-		ID:        uid,
-		FirstName: firstName,
-		LastName:  lastName,
-		Email:     email,
+	existingUser, err := u.repo.Read(uid)
+	if err != nil {
+		return err
 	}
 
-	return u.repo.Update(user)
+	existingUser.FirstName = firstName
+	existingUser.LastName = lastName
+	existingUser.Email = email
+
+	return u.repo.Update(existingUser)
 }
 
 func (u *UserUsecase) Delete(id string) error {
