@@ -14,6 +14,7 @@ type User struct {
 	LastName         string
 	Email            string
 	PasswordHash     string
+	GoogleID         string
 	RiskType         string
 	RegistrationDate time.Time
 	LastAccess       time.Time

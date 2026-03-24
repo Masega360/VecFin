@@ -16,26 +16,24 @@ func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
 	return &PostgresUserRepository{db: db}
 }
 
-// Cambiamos Create por Save para coincidir con la interfaz
 func (r *PostgresUserRepository) Save(user domain.User) error {
 	query := `
-		INSERT INTO users (id, first_name, last_name, email, password_hash, risk_type, registration_date)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (id, first_name, last_name, email, password_hash, google_id, risk_type, registration_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
-	_, err := r.db.Exec(query, user.ID, user.FirstName, user.LastName, user.Email, user.PasswordHash, user.RiskType, user.RegistrationDate)
+	_, err := r.db.Exec(query, user.ID, user.FirstName, user.LastName, user.Email, user.PasswordHash, user.GoogleID, user.RiskType, user.RegistrationDate)
 	return err
 }
 
-// Cambiamos Read por FindByID
 func (r *PostgresUserRepository) FindByID(id uuid.UUID) (domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT id, first_name, last_name, email, password_hash, risk_type, registration_date
+		SELECT id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), risk_type, registration_date
 		FROM users WHERE id = $1
 	`
 	err := r.db.QueryRow(query, id).Scan(
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
-		&user.PasswordHash, &user.RiskType, &user.RegistrationDate,
+		&user.PasswordHash, &user.GoogleID, &user.RiskType, &user.RegistrationDate,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -46,16 +44,34 @@ func (r *PostgresUserRepository) FindByID(id uuid.UUID) (domain.User, error) {
 	return user, nil
 }
 
-// Agregamos el método nuevo que pedía el compilador
 func (r *PostgresUserRepository) FindByEmail(email string) (domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT id, first_name, last_name, email, password_hash, risk_type, registration_date
+		SELECT id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), risk_type, registration_date
 		FROM users WHERE email = $1
 	`
 	err := r.db.QueryRow(query, email).Scan(
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
-		&user.PasswordHash, &user.RiskType, &user.RegistrationDate,
+		&user.PasswordHash, &user.GoogleID, &user.RiskType, &user.RegistrationDate,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return domain.User{}, errors.New("usuario no encontrado")
+		}
+		return domain.User{}, err
+	}
+	return user, nil
+}
+
+func (r *PostgresUserRepository) FindByGoogleID(googleID string) (domain.User, error) {
+	var user domain.User
+	query := `
+		SELECT id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), risk_type, registration_date
+		FROM users WHERE google_id = $1
+	`
+	err := r.db.QueryRow(query, googleID).Scan(
+		&user.ID, &user.FirstName, &user.LastName, &user.Email,
+		&user.PasswordHash, &user.GoogleID, &user.RiskType, &user.RegistrationDate,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
