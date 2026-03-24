@@ -26,11 +26,15 @@ export default function LoginScreen() {
   });
 
   useEffect(() => {
+    if (request?.redirectUri) console.log('REDIRECT URI:', request.redirectUri);
+  }, [request]);
+
+  useEffect(() => {
     if (response?.type === 'success') {
       const { id_token } = response.params;
       handleGoogleToken(id_token);
     } else if (response?.type === 'error') {
-      setError('Error al iniciar sesión con Google');
+      setError(`Error Google: ${response.error?.code} - ${JSON.stringify(response.error)}`);
     }
   }, [response]);
 
