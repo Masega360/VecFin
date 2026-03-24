@@ -11,3 +11,5 @@ require (
 	github.com/lib/pq v1.11.2
 	golang.org/x/crypto v0.49.0
 )
+
+require github.com/rs/cors v1.11.1 // indirect

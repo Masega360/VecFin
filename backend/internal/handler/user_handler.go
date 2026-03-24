@@ -18,11 +18,14 @@ func NewUserHandler(uc *usecase.UserUsecase) *UserHandler {
 }
 
 func (h *UserHandler) RegisterRoutes(jwtSecret string) {
-	// Pública (No requiere token)
+	// Pública
 	http.HandleFunc("POST /users", h.Create)
 
-	// Privadas (Envueltas en el middleware RequireAuth)
+	// Privadas
 	auth := middleware.RequireAuth(jwtSecret)
+
+	// Nueva ruta de perfil: No necesita ID en la URL, lo saca del Token
+	http.HandleFunc("GET /profile", auth(h.GetProfile))
 
 	http.HandleFunc("GET /users/{id}", auth(h.Read))
 	http.HandleFunc("PUT /users/{id}", auth(h.Update))
@@ -109,4 +112,29 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "No se encontró el ID válido en el token", http.StatusUnauthorized)
+		return
+	}
+
+	user, err := h.uc.Read(userID)
+	if err != nil {
+		http.Error(w, "Usuario no encontrado: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	res := UserResponse{
+		ID:               user.ID.String(),
+		FirstName:        user.FirstName,
+		LastName:         user.LastName,
+		Email:            user.Email,
+		RiskType:         user.RiskType,
+		RegistrationDate: user.RegistrationDate,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
 }

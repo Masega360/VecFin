@@ -14,6 +14,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
+	"github.com/rs/cors"
 	"github.com/Masega360/vecfin/backend/config"
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/repository"
@@ -59,8 +60,25 @@ func main() {
 	authHandler := handler.NewAuthHandler(authUC)
 	authHandler.RegisterRoutes()
 
-	log.Println("Servidor corriendo en puerto", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, nil); err != nil {
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"}, // Permite que cualquier origen (web/mobile) te hable
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowCredentials: true,
+	})
+
+	// Envolvemos el Mux por defecto con el middleware de CORS y el de Logs
+	handlerWithCORS := c.Handler(http.DefaultServeMux)
+
+	handlerWithLogs := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Petición recibida: %s %s desde %s", r.Method, r.URL.Path, r.RemoteAddr)
+		handlerWithCORS.ServeHTTP(w, r)
+	})
+
+	serverAddr := ":" + cfg.Port
+	log.Printf("Servidor escuchando en %s", serverAddr)
+
+	if err := http.ListenAndServe(serverAddr, handlerWithLogs); err != nil {
 		log.Fatal("Error al iniciar el servidor:", err)
 	}
 }
