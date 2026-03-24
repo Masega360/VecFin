@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Masega360/vecfin/backend/internal/middleware"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
-	"github.com/Masega360/vecfin/backend/pkg/middleware"
 )
 
 type UserHandler struct {

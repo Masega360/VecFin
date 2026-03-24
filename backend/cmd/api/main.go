@@ -53,7 +53,7 @@ func main() {
 
 	userUC := usecase.NewUserUsecase(userRepo)
 	userHandler := handler.NewUserHandler(userUC)
-	userHandler.RegisterRoutes()
+	userHandler.RegisterRoutes(cfg.JWTSecret)
 
 	authUC := usecase.NewAuthUsecase(userRepo, cfg.JWTSecret)
 	authHandler := handler.NewAuthHandler(authUC)
