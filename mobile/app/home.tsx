@@ -25,7 +25,7 @@ export default function HomeScreen() {
   const fetchUserData = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      if (!token) { router.replace('/'); return; }
+      if (!token) { router.replace('/login'); return; }
 
       const response = await fetch(`${API_URL}/profile`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -54,7 +54,7 @@ export default function HomeScreen() {
 
     if (response.status === 204) {
       await AsyncStorage.removeItem('userToken');
-      router.replace('/');
+      router.replace('/login');
     } else {
       setError('No se pudo eliminar la cuenta');
     }
@@ -62,7 +62,7 @@ export default function HomeScreen() {
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('userToken');
-    router.replace('/');
+    router.replace('/login');
   };
 
   if (loading) return <ActivityIndicator size="large" style={{ flex: 1 }} />;

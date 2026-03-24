@@ -53,7 +53,7 @@ export default function RegisterScreen() {
 
       if (response.status === 201) {
         setSuccess('Cuenta creada. Iniciá sesión.');
-        setTimeout(() => router.replace('/'), 1500);
+        setTimeout(() => router.replace('/login'), 1500);
       } else {
         const data = await response.json().catch(() => ({}));
         setError(data.error || 'No se pudo crear el usuario');
@@ -76,7 +76,7 @@ export default function RegisterScreen() {
       <TouchableOpacity style={styles.btnPrimary} onPress={handleRegister}>
         <Text style={styles.btnText}>Crear Cuenta</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.btnSecondary} onPress={() => router.replace('/')}>
+      <TouchableOpacity style={styles.btnSecondary} onPress={() => router.replace('/login')}>
         <Text style={styles.btnText}>Volver al Login</Text>
       </TouchableOpacity>
     </View>
