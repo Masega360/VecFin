@@ -114,7 +114,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("userID").(string)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 	if !ok {
 		http.Error(w, "No se encontró el ID válido en el token", http.StatusUnauthorized)
 		return

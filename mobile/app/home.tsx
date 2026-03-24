@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, StyleSheet, ActivityIndicator, Platform, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
 const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
 interface User {
+  id: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -14,8 +15,8 @@ interface User {
 export default function HomeScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const router = useRouter();
-  
 
   useEffect(() => {
     fetchUserData();
@@ -24,31 +25,38 @@ export default function HomeScreen() {
   const fetchUserData = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        router.replace('/');
-        return;
-      }
+      if (!token) { router.replace('/'); return; }
 
-      // En un caso real, el ID vendría dentro del Token o lo sabría el Backend.
-      // Por ahora, como es para probar el perfil, pedimos el usuario 1 o el que creaste.
-      const response = await fetch(`${API_URL}/users/1`, { 
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`, // <-- ACÁ MANDAMOS EL PERMISO
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(`${API_URL}/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setUser(data);
+        setUser(await response.json());
       } else {
-        Alert.alert("Error", "No se pudo cargar el perfil");
+        setError('No se pudo cargar el perfil');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      setError('Sin conexión al servidor');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token || !user) return;
+
+    const response = await fetch(`${API_URL}/users/${user.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (response.status === 204) {
+      await AsyncStorage.removeItem('userToken');
+      router.replace('/');
+    } else {
+      setError('No se pudo eliminar la cuenta');
     }
   };
 
@@ -57,36 +65,45 @@ export default function HomeScreen() {
     router.replace('/');
   };
 
-  if (loading) return <ActivityIndicator size="large" style={{flex: 1}} />;
+  if (loading) return <ActivityIndicator size="large" style={{ flex: 1 }} />;
 
   return (
     <View style={styles.container}>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
-           <Text style={styles.avatarText}>{user?.first_name?.[0]}{user?.last_name?.[0]}</Text>
+          <Text style={styles.avatarText}>{user?.first_name?.[0]}{user?.last_name?.[0]}</Text>
         </View>
-        <Text style={styles.welcome}>¡Hola, {user?.first_name}!</Text>
+        <Text style={styles.name}>{user?.first_name} {user?.last_name}</Text>
         <Text style={styles.email}>{user?.email}</Text>
       </View>
 
-      <View style={styles.infoBox}>
-        <Text style={styles.infoTitle}>Estado de Cuenta</Text>
-        <Text>Plan: Developer Free</Text>
-        <Text>Seguridad: JWT Activo</Text>
-      </View>
+      <TouchableOpacity style={styles.btnEdit} onPress={() => router.push('/edit-profile')}>
+        <Text style={styles.btnText}>Editar perfil</Text>
+      </TouchableOpacity>
 
-      <Button title="Cerrar Sesión" color="#ff4444" onPress={handleLogout} />
+      <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
+        <Text style={styles.btnText}>Cerrar sesión</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.btnDelete} onPress={handleDelete}>
+        <Text style={styles.btnText}>Eliminar cuenta</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f2f5', padding: 20, justifyContent: 'center' },
+  error: { color: '#ff4444', textAlign: 'center', marginBottom: 10 },
   profileCard: { backgroundColor: '#fff', padding: 30, borderRadius: 20, alignItems: 'center', elevation: 5, marginBottom: 20 },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#00ADD8', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   avatarText: { color: '#fff', fontSize: 30, fontWeight: 'bold' },
-  welcome: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  email: { color: '#777', marginBottom: 10 },
-  infoBox: { backgroundColor: '#fff', padding: 20, borderRadius: 15, marginBottom: 30 },
-  infoTitle: { fontWeight: 'bold', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }
+  name: { fontSize: 22, fontWeight: 'bold', color: '#333' },
+  email: { color: '#777', marginTop: 4 },
+  btnEdit: { backgroundColor: '#00ADD8', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
+  btnLogout: { backgroundColor: '#888', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
+  btnDelete: { backgroundColor: '#ff4444', padding: 15, borderRadius: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: 'bold' },
 });

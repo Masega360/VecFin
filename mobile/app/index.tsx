@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, Alert, StyleSheet, Platform } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
@@ -8,62 +8,43 @@ const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://loc
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const handleLogin = async () => {
-  try {
-    const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-    // Intentamos parsear el JSON de la respuesta
-    const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({}));
 
-    if (response.ok) {
-      // CASO ÉXITO: 200 OK
-      await AsyncStorage.setItem('userToken', data.token);
-      Alert.alert('¡Éxito!', 'Sesión iniciada correctamente');
-      router.replace('/home'); 
-    } else {
-      // CASO ERROR: 401, 400, 500, etc.
-      // Si el backend manda un mensaje de error, lo mostramos, si no, uno genérico
-      const msg = data.error || 'Credenciales inválidas o usuario no encontrado';
-      Alert.alert('No se pudo ingresar', msg);
+      if (response.ok) {
+        await AsyncStorage.setItem('userToken', data.token);
+        router.replace('/home');
+      } else {
+        setError(data.error || 'Credenciales inválidas');
+      }
+    } catch {
+      setError('Sin conexión al servidor');
     }
-  } catch (error) {
-    // CASO FALLO DE RED: El servidor Go está caído o la IP está mal
-    console.error(error);
-    Alert.alert('Error de conexión', 'No se pudo contactar al servidor de VecFin');
-  }
-};
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>VecFin 💰</Text>
-      <TextInput 
-        style={styles.input} 
-        placeholder="Email" 
-        value={email} 
-        onChangeText={setEmail} 
-        autoCapitalize="none" 
-      />
-      <TextInput 
-        style={styles.input} 
-        placeholder="Contraseña" 
-        value={password} 
-        onChangeText={setPassword} 
-        secureTextEntry 
-      />
-      <Button title="Entrar" onPress={handleLogin} />
-      <View style={{ marginTop: 10 }}>
-        <Button 
-          title="Crear cuenta nueva" 
-          color="orange" 
-          onPress={() => router.push('/register')} 
-        />
-      </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" />
+      <TextInput style={styles.input} placeholder="Contraseña" value={password} onChangeText={setPassword} secureTextEntry />
+      <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin}>
+        <Text style={styles.btnText}>Entrar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.btnSecondary} onPress={() => router.push('/register')}>
+        <Text style={styles.btnText}>Crear cuenta nueva</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -72,4 +53,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: 30, textAlign: 'center' },
   input: { height: 50, borderColor: '#ccc', borderWidth: 1, marginBottom: 15, paddingHorizontal: 15, borderRadius: 8 },
+  error: { color: '#ff4444', textAlign: 'center', marginBottom: 10 },
+  btnPrimary: { backgroundColor: '#00ADD8', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
+  btnSecondary: { backgroundColor: '#f90', padding: 15, borderRadius: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: 'bold' },
 });

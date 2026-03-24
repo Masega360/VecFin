@@ -8,6 +8,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type contextKey string
+
+const UserIDKey contextKey = "user_id"
+
 // RequireAuth es un middleware que verifica que el request traiga un JWT válido
 func RequireAuth(secret string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
@@ -35,7 +39,7 @@ func RequireAuth(secret string) func(http.HandlerFunc) http.HandlerFunc {
 			// 4. Extraer el ID del usuario de los claims y guardarlo en el contexto
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
 				// Guardamos el "user_id" en el contexto del request para que el handler sepa quién es
-				ctx := context.WithValue(r.Context(), "user_id", claims["user_id"])
+				ctx := context.WithValue(r.Context(), UserIDKey, claims["user_id"])
 
 				// Le pasamos el control al handler original (ej. h.Update)
 				next.ServeHTTP(w, r.WithContext(ctx))

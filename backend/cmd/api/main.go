@@ -22,9 +22,8 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error cargando .env")
-	}
+	// En Docker las vars vienen del compose; godotenv solo aplica en desarrollo local
+	godotenv.Load()
 
 	cfg := config.Load()
 
@@ -61,10 +60,10 @@ func main() {
 	authHandler.RegisterRoutes()
 
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // Permite que cualquier origen (web/mobile) te hable
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 	})
 
 	// Envolvemos el Mux por defecto con el middleware de CORS y el de Logs
