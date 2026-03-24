@@ -3,7 +3,7 @@ package usecase
 import (
 	"time"
 
-	"github.com/Masega360/vecfin/internal/domain"
+	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -31,7 +31,8 @@ func (u *UserUsecase) Create(firstName, lastName, email, password string) error 
 		RegistrationDate: time.Now(),
 	}
 
-	return u.repo.Create(user)
+	// Usamos Save en lugar de Create
+	return u.repo.Save(user)
 }
 
 func (u *UserUsecase) Read(id string) (domain.User, error) {
@@ -39,7 +40,8 @@ func (u *UserUsecase) Read(id string) (domain.User, error) {
 	if err != nil {
 		return domain.User{}, err
 	}
-	return u.repo.Read(uid)
+	// Usamos FindByID
+	return u.repo.FindByID(uid)
 }
 
 func (u *UserUsecase) Update(id, firstName, lastName, email string) error {
@@ -48,14 +50,15 @@ func (u *UserUsecase) Update(id, firstName, lastName, email string) error {
 		return err
 	}
 
-	existingUser, err := u.repo.Read(uid)
+	existingUser, err := u.repo.FindByID(uid)
 	if err != nil {
 		return err
 	}
 
-	existingUser.FirstName = firstName
-	existingUser.LastName = lastName
-	existingUser.Email = email
+	// Le decimos al objeto que se actualice a sí mismo (Modelo Rico)
+	if err := existingUser.UpdateProfile(firstName, lastName, email); err != nil {
+		return err
+	}
 
 	return u.repo.Update(existingUser)
 }

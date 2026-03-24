@@ -4,11 +4,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type UUID = uuid.UUID
-
 type UserRepository interface {
-	Create(user User) error
-	Read(id UUID) (User, error)
+	Save(user User) error
+	FindByID(id uuid.UUID) (User, error)
+	FindByEmail(email string) (User, error) // Agregado porque lo vas a necesitar para el Login
 	Update(user User) error
-	Delete(id UUID) error
+	Delete(id uuid.UUID) error
 }
