@@ -1,0 +1,32 @@
+sequenceDiagram
+    actor Usuario
+    participant App as Mobile App (React Native)
+    participant Handler as MarketHandler (Go)
+    participant Service as YahooFinanceClient (Go)
+    participant Yahoo as API Yahoo Finance
+
+    Usuario->>App: Escribe "AAPL" en SearchBar
+    App->>Handler: HTTP GET /market/search?q=AAPL
+    
+    activate Handler
+    Handler->>Handler: Extraer y validar parámetro "q"
+    Handler->>Service: SearchAssets("AAPL")
+    
+    activate Service
+    Service->>Yahoo: HTTP GET /v1/finance/search?q=AAPL
+    
+    activate Yahoo
+    Note over Yahoo: Busca coincidencias
+    Yahoo-->>Service: Respuesta JSON cruda (quotes)
+    deactivate Yahoo
+    
+    Service->>Service: Deserializar JSON (Unmarshal)
+    Service->>Service: Mapear a []AssetDTO interno
+    Service-->>Handler: Lista de activos estructurada
+    deactivate Service
+    
+    Handler->>Handler: Empaquetar en respuesta estándar
+    Handler-->>App: HTTP 200 OK (JSON Data)
+    deactivate Handler
+    
+    App-->>Usuario: Actualiza lista de resultados en UI

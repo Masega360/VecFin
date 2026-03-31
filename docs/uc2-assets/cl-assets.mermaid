@@ -1,0 +1,46 @@
+classDiagram
+    direction TB
+
+    class MarketHandler {
+        -service YahooFinanceService
+        +SearchAssets(w http.ResponseWriter, r *http.Request)
+    }
+
+    class YahooFinanceService {
+        <<interface>>
+        +SearchAssets(query string) ([]AssetDTO, error)
+    }
+
+    class YahooClient {
+        -httpClient *http.Client
+        -searchURL string
+        +SearchAssets(query string) ([]AssetDTO, error)
+        -parseResponse(data []byte) (*YahooSearchResponse, error)
+    }
+
+    class AssetDTO {
+        <<struct>>
+        +Symbol string
+        +Name string
+        +Type string
+    }
+
+    class YahooSearchResponse {
+        <<struct>>
+        +Quotes []YahooQuote
+    }
+
+    class YahooQuote {
+        <<struct>>
+        +Symbol string
+        +Shortname string
+        +QuoteType string
+    }
+
+    %% Relaciones
+    MarketHandler --> YahooFinanceService : Inyección de dependencias
+    YahooClient ..|> YahooFinanceService : Implementa
+    YahooClient --> YahooSearchResponse : Deserializa JSON a
+    YahooSearchResponse *-- YahooQuote : Contiene
+    YahooClient --> AssetDTO : Transforma YahooQuote en
+    MarketHandler --> AssetDTO : Serializa a JSON y envía
