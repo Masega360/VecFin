@@ -2,11 +2,11 @@ classDiagram
     direction TB
 
     class MarketHandler {
-        -service YahooFinanceService
+        -service MarketService
         +SearchAssets(w http.ResponseWriter, r *http.Request)
     }
 
-    class YahooFinanceService {
+    class MarketService {
         <<interface>>
         +SearchAssets(query string) ([]AssetDTO, error)
     }
@@ -38,8 +38,8 @@ classDiagram
     }
 
     %% Relaciones
-    MarketHandler --> YahooFinanceService : Inyección de dependencias
-    YahooClient ..|> YahooFinanceService : Implementa
+    MarketHandler --> MarketService : Inyección de dependencias
+    YahooClient ..|> MarketService : Implementa
     YahooClient --> YahooSearchResponse : Deserializa JSON a
     YahooSearchResponse *-- YahooQuote : Contiene
     YahooClient --> AssetDTO : Transforma YahooQuote en
