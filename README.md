@@ -135,14 +135,21 @@ Scan the QR code with **Expo Go** on your phone ([Android](https://play.google.c
 
 ## API — Main endpoints
 
+### Implemented
+
 ```
 POST   /auth/login              Sign in
 POST   /auth/google             Sign in with Google
 POST   /users                   Register a new user
 GET    /profile                 Get authenticated user profile
+GET    /users/:id               Get user by ID
 PUT    /users/:id               Update profile
 DELETE /users/:id               Delete account
+```
 
+### Planned
+
+```
 GET    /portfolio               Consolidated dashboard
 GET    /portfolio/assets        Portfolio assets
 POST   /portfolio/assets        Add asset manually
