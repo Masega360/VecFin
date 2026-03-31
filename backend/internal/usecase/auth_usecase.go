@@ -1,11 +1,7 @@
 package usecase
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -15,12 +11,13 @@ import (
 )
 
 type AuthUsecase struct {
-	repo      domain.UserRepository
-	jwtSecret string
+	repo           domain.UserRepository
+	jwtSecret      string
+	googleVerifier domain.GoogleVerifier
 }
 
-func NewAuthUsecase(repo domain.UserRepository, secret string) *AuthUsecase {
-	return &AuthUsecase{repo: repo, jwtSecret: secret}
+func NewAuthUsecase(repo domain.UserRepository, secret string, googleVerifier domain.GoogleVerifier) *AuthUsecase {
+	return &AuthUsecase{repo: repo, jwtSecret: secret, googleVerifier: googleVerifier}
 }
 
 func (u *AuthUsecase) Login(email, password string) (string, error) {
@@ -29,8 +26,7 @@ func (u *AuthUsecase) Login(email, password string) (string, error) {
 		return "", errors.New("credenciales inválidas")
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
-	if err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return "", errors.New("credenciales inválidas")
 	}
 
@@ -38,50 +34,24 @@ func (u *AuthUsecase) Login(email, password string) (string, error) {
 }
 
 func (u *AuthUsecase) GoogleLogin(idToken string) (string, error) {
-	// 1. Verificar el token con Google
-	resp, err := http.Get(fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?id_token=%s", idToken))
+	info, err := u.googleVerifier.Verify(idToken)
 	if err != nil {
-		return "", errors.New("error al verificar token de Google")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", errors.New("token de Google inválido")
+		return "", err
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// Buscar usuario existente por google_id
+	user, err := u.repo.FindByGoogleID(info.Sub)
 	if err != nil {
-		return "", errors.New("error al leer respuesta de Google")
-	}
-
-	var googleInfo struct {
-		Sub           string `json:"sub"`
-		Email         string `json:"email"`
-		GivenName     string `json:"given_name"`
-		FamilyName    string `json:"family_name"`
-		EmailVerified string `json:"email_verified"`
-	}
-	if err := json.Unmarshal(body, &googleInfo); err != nil {
-		return "", errors.New("error al parsear respuesta de Google")
-	}
-
-	if googleInfo.Sub == "" {
-		return "", errors.New("token de Google inválido")
-	}
-
-	// 2. Buscar usuario existente por google_id
-	user, err := u.repo.FindByGoogleID(googleInfo.Sub)
-	if err != nil {
-		// 3. Si no existe, buscar por email (puede tener cuenta manual)
-		user, err = u.repo.FindByEmail(googleInfo.Email)
+		// Si no existe, buscar por email (puede tener cuenta manual)
+		user, err = u.repo.FindByEmail(info.Email)
 		if err != nil {
-			// 4. Si tampoco existe, crear usuario nuevo
+			// Si tampoco existe, crear usuario nuevo
 			user = domain.User{
 				ID:               uuid.New(),
-				FirstName:        googleInfo.GivenName,
-				LastName:         googleInfo.FamilyName,
-				Email:            googleInfo.Email,
-				GoogleID:         googleInfo.Sub,
+				FirstName:        info.GivenName,
+				LastName:         info.FamilyName,
+				Email:            info.Email,
+				GoogleID:         info.Sub,
 				RiskType:         "medium",
 				RegistrationDate: time.Now(),
 			}
@@ -90,8 +60,10 @@ func (u *AuthUsecase) GoogleLogin(idToken string) (string, error) {
 			}
 		} else {
 			// Vincular google_id a cuenta existente
-			user.GoogleID = googleInfo.Sub
-			u.repo.Update(user)
+			user.GoogleID = info.Sub
+			if err := u.repo.Update(user); err != nil {
+				return "", errors.New("error al vincular cuenta de Google")
+			}
 		}
 	}
 

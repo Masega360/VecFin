@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"errors"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -17,6 +18,16 @@ func NewUserUsecase(repo domain.UserRepository) *UserUsecase {
 }
 
 func (u *UserUsecase) Create(firstName, lastName, email, password string) error {
+	if firstName == "" || lastName == "" {
+		return errors.New("el nombre y el apellido no pueden estar vacíos")
+	}
+	if email == "" {
+		return errors.New("el email es obligatorio")
+	}
+	if len(password) < 8 {
+		return errors.New("la contraseña debe tener al menos 8 caracteres")
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -31,7 +42,6 @@ func (u *UserUsecase) Create(firstName, lastName, email, password string) error 
 		RegistrationDate: time.Now(),
 	}
 
-	// Usamos Save en lugar de Create
 	return u.repo.Save(user)
 }
 

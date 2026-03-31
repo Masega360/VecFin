@@ -5,15 +5,22 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/middleware"
-	"github.com/Masega360/vecfin/backend/internal/usecase"
 )
 
-type UserHandler struct {
-	uc *usecase.UserUsecase
+type UserUsecasePort interface {
+	Create(firstName, lastName, email, password string) error
+	Read(id string) (domain.User, error)
+	Update(id, firstName, lastName, email string) error
+	Delete(id string) error
 }
 
-func NewUserHandler(uc *usecase.UserUsecase) *UserHandler {
+type UserHandler struct {
+	uc UserUsecasePort
+}
+
+func NewUserHandler(uc UserUsecasePort) *UserHandler {
 	return &UserHandler{uc: uc}
 }
 
@@ -24,9 +31,7 @@ func (h *UserHandler) RegisterRoutes(jwtSecret string) {
 	// Privadas
 	auth := middleware.RequireAuth(jwtSecret)
 
-	// Nueva ruta de perfil: No necesita ID en la URL, lo saca del Token
 	http.HandleFunc("GET /profile", auth(h.GetProfile))
-
 	http.HandleFunc("GET /users/{id}", auth(h.Read))
 	http.HandleFunc("PUT /users/{id}", auth(h.Update))
 	http.HandleFunc("DELETE /users/{id}", auth(h.Delete))
@@ -54,14 +59,13 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.uc.Create(body.FirstName, body.LastName, body.Email, body.Password); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
 }
 
 func (h *UserHandler) Read(w http.ResponseWriter, r *http.Request) {
-	// Extraemos el ID usando la nueva función PathValue
 	id := r.PathValue("id")
 
 	user, err := h.uc.Read(id)
@@ -70,7 +74,6 @@ func (h *UserHandler) Read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mapeamos la entidad de dominio al DTO de respuesta
 	res := UserResponse{
 		ID:               user.ID.String(),
 		FirstName:        user.FirstName,
@@ -98,7 +101,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.uc.Update(id, body.FirstName, body.LastName, body.Email); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -113,6 +116,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 	if !ok {

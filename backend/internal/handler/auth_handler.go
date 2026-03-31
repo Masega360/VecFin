@@ -3,15 +3,18 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/Masega360/vecfin/backend/internal/usecase"
 )
 
-type AuthHandler struct {
-	uc *usecase.AuthUsecase
+type AuthUsecasePort interface {
+	Login(email, password string) (string, error)
+	GoogleLogin(idToken string) (string, error)
 }
 
-func NewAuthHandler(uc *usecase.AuthUsecase) *AuthHandler {
+type AuthHandler struct {
+	uc AuthUsecasePort
+}
+
+func NewAuthHandler(uc AuthUsecasePort) *AuthHandler {
 	return &AuthHandler{uc: uc}
 }
 

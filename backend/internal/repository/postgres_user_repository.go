@@ -85,10 +85,10 @@ func (r *PostgresUserRepository) FindByGoogleID(googleID string) (domain.User, e
 func (r *PostgresUserRepository) Update(user domain.User) error {
 	query := `
 		UPDATE users
-		SET first_name = $1, last_name = $2, email = $3, risk_type = $4
-		WHERE id = $5
+		SET first_name = $1, last_name = $2, email = $3, risk_type = $4, google_id = $5
+		WHERE id = $6
 	`
-	_, err := r.db.Exec(query, user.FirstName, user.LastName, user.Email, user.RiskType, user.ID)
+	_, err := r.db.Exec(query, user.FirstName, user.LastName, user.Email, user.RiskType, user.GoogleID, user.ID)
 	return err
 }
 

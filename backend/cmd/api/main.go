@@ -16,6 +16,7 @@ import (
 
 	"github.com/rs/cors"
 	"github.com/Masega360/vecfin/backend/config"
+	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -46,7 +47,7 @@ func main() {
 	log.Println("Conectado a la DB")
 
 	// --- LÓGICA DE MIGRACIÓN AUTOMÁTICA ---
-	runMigrations(db)
+	runMigrations(db, cfg.MigrationsPath)
 	// --------------------------------------
 
 	userRepo := repository.NewPostgresUserRepository(db)
@@ -55,7 +56,8 @@ func main() {
 	userHandler := handler.NewUserHandler(userUC)
 	userHandler.RegisterRoutes(cfg.JWTSecret)
 
-	authUC := usecase.NewAuthUsecase(userRepo, cfg.JWTSecret)
+	googleVerifier := googleauth.NewHTTPGoogleVerifier()
+	authUC := usecase.NewAuthUsecase(userRepo, cfg.JWTSecret, googleVerifier)
 	authHandler := handler.NewAuthHandler(authUC)
 	authHandler.RegisterRoutes()
 
@@ -83,7 +85,7 @@ func main() {
 }
 
 // runMigrations lee los archivos .sql y actualiza la base de datos
-func runMigrations(db *sql.DB) {
+func runMigrations(db *sql.DB, migrationsPath string) {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		log.Fatal("Error instanciando driver de migración:", err)
@@ -91,7 +93,7 @@ func runMigrations(db *sql.DB) {
 
 	// Apunta a la carpeta local de migraciones
 	m, err := migrate.NewWithDatabaseInstance(
-		"file://migrations",
+		migrationsPath,
 		"postgres",
 		driver,
 	)

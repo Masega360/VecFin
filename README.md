@@ -52,15 +52,7 @@ vecfin/
 ├── backend/
 │   ├── cmd/api/            # HTTP server entrypoint
 │   ├── internal/
-│   │   ├── auth/           # Authentication and sessions
-│   │   ├── user/           # User and profile management
-│   │   ├── portfolio/      # Portfolios and assets
-│   │   ├── platform/       # External platform integration
-│   │   ├── community/      # Social module (communities, posts)
-│   │   ├── ai/             # AI financial assistant
-│   │   ├── market/         # Market data (prices, assets)
-│   │   └── notification/   # Alerts and notifications
-│   ├── migrations/         # Database migrations
+│   │   ├── auth/           # Authentication anatabase migrations
 │   ├── Dockerfile
 │   └── docker-compose.yml
 ├── mobile/

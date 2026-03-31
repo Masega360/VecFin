@@ -17,7 +17,6 @@ type User struct {
 	GoogleID         string
 	RiskType         string
 	RegistrationDate time.Time
-	LastAccess       time.Time
 }
 
 // UpdateProfile es un método de dominio que controla cómo se modifica un usuario.
