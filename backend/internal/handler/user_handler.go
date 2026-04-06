@@ -55,7 +55,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Password  string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
 		return
 	}
 	if err := h.uc.Create(body.FirstName, body.LastName, body.Email, body.Password); err != nil {
@@ -96,7 +96,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Email     string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
 		return
 	}
 

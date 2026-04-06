@@ -28,6 +28,9 @@ func main() {
 	godotenv.Load()
 
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatal("Configuración inválida:", err)
+	}
 
 	dsn := "host=" + cfg.DBHost +
 		" port=" + cfg.DBPort +
@@ -67,6 +70,11 @@ func main() {
 	marketUC := usecase.NewMarketUsecase(yahooClient, assetRepo)
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
+
+	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+	})
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},

@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, ActivityIndicator, Platform,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+import { API_URL, getValidToken } from '@/utils/api';
 
 interface Asset {
   symbol: string;
@@ -23,26 +21,26 @@ interface FavAsset {
 
 export default function AssetsTab() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Asset[]>([]);
-  const [favorites, setFavorites] = useState<FavAsset[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [query,       setQuery]       = useState('');
+  const [results,     setResults]     = useState<Asset[]>([]);
+  const [favorites,   setFavorites]   = useState<FavAsset[]>([]);
+  const [searching,   setSearching]   = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [view, setView] = useState<'search' | 'favorites'>('search');
+  const [view,        setView]        = useState<'search' | 'favorites'>('search');
 
-  useEffect(() => {
-    loadFavorites();
-  }, []);
+  useEffect(() => { loadFavorites(); }, []);
 
   const loadFavorites = async () => {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await getValidToken();
     if (!token) return;
     try {
       const res = await fetch(`${API_URL}/assets/favorites`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setFavorites(await res.json() ?? []);
-    } catch {}
+    } catch {
+      // favoritos no críticos, no bloquear la UI
+    }
   };
 
   const search = useCallback(async () => {
@@ -56,33 +54,39 @@ export default function AssetsTab() {
         setResults(await res.json() ?? []);
       } else {
         setSearchError('Error al buscar activos');
+        setResults([]);
       }
     } catch {
       setSearchError('Sin conexión al servidor');
+      setResults([]);
     } finally {
       setSearching(false);
     }
   }, [query]);
 
   const addFavorite = async (symbol: string) => {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await getValidToken();
     if (!token) return;
-    await fetch(`${API_URL}/assets/favorites`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asset_id: symbol }),
-    });
-    loadFavorites();
+    try {
+      await fetch(`${API_URL}/assets/favorites`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_id: symbol }),
+      });
+      loadFavorites();
+    } catch {}
   };
 
   const removeFavorite = async (symbol: string) => {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await getValidToken();
     if (!token) return;
-    await fetch(`${API_URL}/assets/favorites/${encodeURIComponent(symbol)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    loadFavorites();
+    try {
+      await fetch(`${API_URL}/assets/favorites/${encodeURIComponent(symbol)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      loadFavorites();
+    } catch {}
   };
 
   const isFav = (symbol: string) => favorites.some(f => f.asset_id === symbol);
@@ -92,11 +96,7 @@ export default function AssetsTab() {
   };
 
   const renderAsset = ({ item }: { item: Asset }) => (
-    <TouchableOpacity
-      style={styles.assetRow}
-      onPress={() => goToDetail(item.symbol, item.name)}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity style={styles.assetRow} onPress={() => goToDetail(item.symbol, item.name)} activeOpacity={0.7}>
       <View style={styles.assetInfo}>
         <Text style={styles.symbol}>{item.symbol}</Text>
         <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>
@@ -117,11 +117,7 @@ export default function AssetsTab() {
   );
 
   const renderFav = ({ item }: { item: FavAsset }) => (
-    <TouchableOpacity
-      style={styles.assetRow}
-      onPress={() => goToDetail(item.asset_id, item.asset_id)}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity style={styles.assetRow} onPress={() => goToDetail(item.asset_id, item.asset_id)} activeOpacity={0.7}>
       <View style={styles.assetInfo}>
         <Text style={styles.symbol}>{item.asset_id}</Text>
       </View>
@@ -137,7 +133,6 @@ export default function AssetsTab() {
 
   return (
     <View style={styles.container}>
-      {/* Sub-view toggle */}
       <View style={styles.toggle}>
         <TouchableOpacity
           style={[styles.toggleBtn, view === 'search' && styles.toggleActive]}
@@ -152,7 +147,7 @@ export default function AssetsTab() {
         >
           <MaterialIcons name="star" size={16} color={view === 'favorites' ? '#FFB300' : '#4a6a80'} />
           <Text style={[styles.toggleText, view === 'favorites' && styles.toggleTextActive]}>
-            Favoritos {favorites.length > 0 ? `(${favorites.length})` : ''}
+            Favoritos{favorites.length > 0 ? ` (${favorites.length})` : ''}
           </Text>
         </TouchableOpacity>
       </View>
@@ -172,7 +167,7 @@ export default function AssetsTab() {
               autoCapitalize="characters"
             />
             {query.length > 0 && (
-              <TouchableOpacity onPress={() => { setQuery(''); setResults([]); }}>
+              <TouchableOpacity onPress={() => { setQuery(''); setResults([]); setSearchError(''); }}>
                 <MaterialIcons name="close" size={18} color="#4a6a80" />
               </TouchableOpacity>
             )}
@@ -185,7 +180,12 @@ export default function AssetsTab() {
             }
           </TouchableOpacity>
 
-          {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
+          {searchError ? (
+            <View style={styles.errorBox}>
+              <MaterialIcons name="error-outline" size={14} color="#ff6666" />
+              <Text style={styles.errorText}>{searchError}</Text>
+            </View>
+          ) : null}
 
           <FlatList
             data={results}
@@ -193,8 +193,8 @@ export default function AssetsTab() {
             renderItem={renderAsset}
             contentContainerStyle={styles.list}
             ListEmptyComponent={
-              !searching && query.length > 0
-                ? <Text style={styles.emptyText}>Sin resultados</Text>
+              !searching && query.trim().length > 0 && !searchError
+                ? <Text style={styles.emptyText}>Sin resultados para "{query.trim()}"</Text>
                 : null
             }
           />
@@ -220,15 +220,15 @@ export default function AssetsTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   toggle: {
-    flexDirection: 'row', margin: 16, backgroundColor: '#0d1e30',
-    borderRadius: 12, padding: 4,
+    flexDirection: 'row', margin: 16,
+    backgroundColor: '#0d1e30', borderRadius: 12, padding: 4,
   },
   toggleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 8, borderRadius: 10,
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10,
   },
-  toggleActive: { backgroundColor: '#132238' },
-  toggleText: { color: '#4a6a80', fontSize: 14, fontWeight: '600' },
+  toggleActive:     { backgroundColor: '#132238' },
+  toggleText:       { color: '#4a6a80', fontSize: 14, fontWeight: '600' },
   toggleTextActive: { color: '#fff' },
   searchBar: {
     flexDirection: 'row', alignItems: 'center',
@@ -244,26 +244,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
   searchBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20 },
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginHorizontal: 16, marginTop: 8,
+  },
+  errorText:  { color: '#ff6666', fontSize: 13 },
+  list:       { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20 },
   assetRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#132238', borderRadius: 14,
     padding: 14, marginBottom: 8,
     borderWidth: 1, borderColor: '#1e3a5a',
   },
-  assetInfo: { flex: 1 },
-  symbol: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  assetName: { color: '#8aaabf', fontSize: 13, marginTop: 2 },
-  assetType: {
-    color: '#00ADD8', fontSize: 11, marginTop: 4,
-    textTransform: 'uppercase', fontWeight: '600',
-  },
+  assetInfo:  { flex: 1 },
+  symbol:     { color: '#fff', fontWeight: '700', fontSize: 16 },
+  assetName:  { color: '#8aaabf', fontSize: 13, marginTop: 2 },
+  assetType:  { color: '#00ADD8', fontSize: 11, marginTop: 4, textTransform: 'uppercase', fontWeight: '600' },
   favBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: '#0d1e30', justifyContent: 'center', alignItems: 'center',
   },
   favBtnActive: { backgroundColor: '#2a2000' },
-  errorText: { color: '#ff6666', textAlign: 'center', marginTop: 8, fontSize: 13 },
-  emptyText: { color: '#4a6a80', textAlign: 'center', marginTop: 20 },
-  emptyFavs: { alignItems: 'center', marginTop: 60, gap: 12 },
+  emptyText:  { color: '#4a6a80', textAlign: 'center', marginTop: 20 },
+  emptyFavs:  { alignItems: 'center', marginTop: 60, gap: 12 },
 });

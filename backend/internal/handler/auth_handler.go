@@ -30,7 +30,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
 		return
 	}
 
@@ -50,7 +50,7 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.IDToken == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
 		return
 	}
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 )
 
@@ -26,6 +27,19 @@ func Load() *Config {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		MigrationsPath: getEnvOrDefault("MIGRATIONS_PATH", "file://migrations"),
 	}
+}
+
+func (c *Config) Validate() error {
+	if c.JWTSecret == "" {
+		return errors.New("JWT_SECRET no puede estar vacío")
+	}
+	if len(c.JWTSecret) < 32 {
+		return errors.New("JWT_SECRET debe tener al menos 32 caracteres")
+	}
+	if c.Port == "" {
+		return errors.New("PORT no puede estar vacío")
+	}
+	return nil
 }
 
 func getEnvOrDefault(key, defaultVal string) string {

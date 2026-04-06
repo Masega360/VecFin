@@ -2,11 +2,16 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/middleware"
 )
+
+var validSymbol = regexp.MustCompile(`^[A-Z0-9.\-=^]+$`)
 
 type MarketUsecasePort interface {
 	SearchAssets(query string) ([]domain.Asset, error)
@@ -35,20 +40,46 @@ func (h *MarketHandler) RegisterRoutes(jwtSecret string) {
 }
 
 func (h *MarketHandler) SearchAssets(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("query")
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
 	if query == "" {
-		http.Error(w, "query parameter is required", http.StatusBadRequest)
+		http.Error(w, "el parámetro query es requerido", http.StatusBadRequest)
 		return
 	}
 
 	assets, err := h.uc.SearchAssets(query)
 	if err != nil {
-		http.Error(w, "error searching assets: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "error al buscar activos", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(assets)
+}
+
+func (h *MarketHandler) GetAssetDetails(w http.ResponseWriter, r *http.Request) {
+	symbol := strings.ToUpper(strings.TrimSpace(r.PathValue("symbol")))
+	if symbol == "" {
+		http.Error(w, "símbolo requerido", http.StatusBadRequest)
+		return
+	}
+	if !validSymbol.MatchString(symbol) {
+		http.Error(w, "símbolo inválido", http.StatusBadRequest)
+		return
+	}
+
+	rangeParam := r.URL.Query().Get("range")
+	details, err := h.uc.GetAssetDetails(symbol, rangeParam)
+	if err != nil {
+		if errors.Is(err, domain.ErrAssetNotFound) {
+			http.Error(w, "activo no encontrado", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "error al obtener detalles del activo", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(details)
 }
 
 func (h *MarketHandler) ListFavorites(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +91,7 @@ func (h *MarketHandler) ListFavorites(w http.ResponseWriter, r *http.Request) {
 
 	favs, err := h.uc.ListFavorites(userID)
 	if err != nil {
-		http.Error(w, "error listando favoritos: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "error al listar favoritos", http.StatusInternalServerError)
 		return
 	}
 
@@ -78,35 +109,17 @@ func (h *MarketHandler) AddFavorite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		AssetID string `json:"asset_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AssetID == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.AssetID) == "" {
 		http.Error(w, "asset_id requerido", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.uc.AddFavorite(userID, body.AssetID); err != nil {
-		http.Error(w, "error agregando favorito: "+err.Error(), http.StatusInternalServerError)
+	if err := h.uc.AddFavorite(userID, strings.TrimSpace(body.AssetID)); err != nil {
+		http.Error(w, "error al agregar favorito", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-}
-
-func (h *MarketHandler) GetAssetDetails(w http.ResponseWriter, r *http.Request) {
-	symbol := r.PathValue("symbol")
-	if symbol == "" {
-		http.Error(w, "symbol requerido", http.StatusBadRequest)
-		return
-	}
-	rangeParam := r.URL.Query().Get("range")
-
-	details, err := h.uc.GetAssetDetails(symbol, rangeParam)
-	if err != nil {
-		http.Error(w, "error obteniendo detalles: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(details)
 }
 
 func (h *MarketHandler) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +136,7 @@ func (h *MarketHandler) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.uc.RemoveFavorite(userID, assetID); err != nil {
-		http.Error(w, "error eliminando favorito: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "error al eliminar favorito", http.StatusInternalServerError)
 		return
 	}
 

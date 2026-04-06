@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Platform,
+  ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL, getValidToken } from '@/utils/api';
 
 interface User {
   id: string;
@@ -18,20 +17,17 @@ interface User {
 }
 
 export default function ProfileTab() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user,    setUser]    = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error,   setError]   = useState('');
   const router = useRouter();
 
-  useEffect(() => {
-    fetchUser();
-  }, []);
+  useEffect(() => { fetchUser(); }, []);
 
   const fetchUser = async () => {
+    const token = await getValidToken();
+    if (!token) return;
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) { router.replace('/login'); return; }
-
       const res = await fetch(`${API_URL}/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -53,17 +49,21 @@ export default function ProfileTab() {
   };
 
   const handleDelete = async () => {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await getValidToken();
     if (!token || !user) return;
-    const res = await fetch(`${API_URL}/users/${user.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.status === 204) {
-      await AsyncStorage.removeItem('userToken');
-      router.replace('/login');
-    } else {
-      setError('No se pudo eliminar la cuenta');
+    try {
+      const res = await fetch(`${API_URL}/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 204) {
+        await AsyncStorage.removeItem('userToken');
+        router.replace('/login');
+      } else {
+        setError('No se pudo eliminar la cuenta');
+      }
+    } catch {
+      setError('Sin conexión al servidor');
     }
   };
 
@@ -112,7 +112,7 @@ export default function ProfileTab() {
 }
 
 const styles = StyleSheet.create({
-  loader: { flex: 1, marginTop: 60 },
+  loader:    { flex: 1, marginTop: 60 },
   container: { flex: 1, padding: 20 },
   errorBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -122,8 +122,7 @@ const styles = StyleSheet.create({
   errorText: { color: '#cc2222', fontSize: 13, flex: 1 },
   card: {
     backgroundColor: '#132238', borderRadius: 20, padding: 28,
-    alignItems: 'center', borderWidth: 1, borderColor: '#1e3a5a',
-    marginBottom: 20,
+    alignItems: 'center', borderWidth: 1, borderColor: '#1e3a5a', marginBottom: 20,
   },
   avatar: {
     width: 80, height: 80, borderRadius: 40,
@@ -131,8 +130,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginBottom: 14,
   },
   avatarText: { color: '#00ADD8', fontSize: 28, fontWeight: '700' },
-  name: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  email: { color: '#8aaabf', fontSize: 14 },
+  name:       { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 4 },
+  email:      { color: '#8aaabf', fontSize: 14 },
   riskBadge: {
     marginTop: 10, backgroundColor: '#00ADD815',
     borderRadius: 20, paddingHorizontal: 14, paddingVertical: 4,
@@ -141,8 +140,7 @@ const styles = StyleSheet.create({
   riskText: { color: '#00ADD8', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
   btnEdit: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#00ADD8', padding: 15, borderRadius: 14,
-    marginBottom: 10,
+    backgroundColor: '#00ADD8', padding: 15, borderRadius: 14, marginBottom: 10,
     shadowColor: '#00ADD8', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
   },

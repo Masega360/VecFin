@@ -146,7 +146,7 @@ func (c *Client) GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetail
 	}
 
 	if len(raw.Chart.Result) == 0 {
-		return nil, fmt.Errorf("yahoo: símbolo no encontrado")
+		return nil, domain.ErrAssetNotFound
 	}
 
 	r := raw.Chart.Result[0]

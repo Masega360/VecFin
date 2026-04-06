@@ -1,10 +1,14 @@
 package domain
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrAssetNotFound se devuelve cuando el símbolo no existe en el proveedor
+var ErrAssetNotFound = errors.New("activo no encontrado")
 
 // Asset representa un activo financiero en nuestra regla de negocio
 type Asset struct {

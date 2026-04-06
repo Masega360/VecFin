@@ -28,6 +28,10 @@ func (u *UserUsecase) Create(firstName, lastName, email, password string) error 
 		return errors.New("la contraseña debe tener al menos 8 caracteres")
 	}
 
+	if _, err := u.repo.FindByEmail(email); err == nil {
+		return errors.New("el email ya está registrado")
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
