@@ -1,109 +1,189 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  SafeAreaView, ScrollView, Platform,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+import AssetsTab from '@/components/tabs/AssetsTab';
+import ProfileTab from '@/components/tabs/ProfileTab';
 
-interface User {
+// ─── Tab config ──────────────────────────────────────────────────────────────
+// Para agregar una nueva tab:
+//   1. Importar el componente arriba
+//   2. Agregar un objeto a este array
+// ─────────────────────────────────────────────────────────────────────────────
+type TabConfig = {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-}
+  label: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  component: React.ComponentType | null; // null = coming soon
+};
 
-export default function HomeScreen() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const router = useRouter();
+const TABS: TabConfig[] = [
+  {
+    id: 'assets',
+    label: 'Assets',
+    icon: 'trending-up',
+    component: AssetsTab,
+  },
+  {
+    id: 'community',
+    label: 'Comunidad',
+    icon: 'people',
+    component: null, // próximamente
+  },
+  {
+    id: 'profile',
+    label: 'Perfil',
+    icon: 'person',
+    component: ProfileTab,
+  },
+];
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const fetchUserData = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) { router.replace('/login'); return; }
+export default function MainScreen() {
+  const firstEnabled = TABS.find(t => t.component !== null)?.id ?? TABS[0].id;
+  const [activeTab, setActiveTab] = useState(firstEnabled);
 
-      const response = await fetch(`${API_URL}/profile`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        setUser(await response.json());
-      } else {
-        setError('No se pudo cargar el perfil');
-      }
-    } catch {
-      setError('Sin conexión al servidor');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    const token = await AsyncStorage.getItem('userToken');
-    if (!token || !user) return;
-
-    const response = await fetch(`${API_URL}/users/${user.id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-
-    if (response.status === 204) {
-      await AsyncStorage.removeItem('userToken');
-      router.replace('/login');
-    } else {
-      setError('No se pudo eliminar la cuenta');
-    }
-  };
-
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem('userToken');
-    router.replace('/login');
-  };
-
-  if (loading) return <ActivityIndicator size="large" style={{ flex: 1 }} />;
+  const current = TABS.find(t => t.id === activeTab);
+  const TabContent = current?.component ?? null;
 
   return (
-    <View style={styles.container}>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user?.first_name?.[0]}{user?.last_name?.[0]}</Text>
-        </View>
-        <Text style={styles.name}>{user?.first_name} {user?.last_name}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+    <SafeAreaView style={styles.root}>
+      {/* Top tab bar */}
+      <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarInner}
+        >
+          {TABS.map(tab => {
+            const isActive = tab.id === activeTab;
+            const isDisabled = tab.component === null;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.tab, isActive && styles.tabActive]}
+                onPress={() => !isDisabled && setActiveTab(tab.id)}
+                activeOpacity={isDisabled ? 1 : 0.7}
+              >
+                <MaterialIcons
+                  name={tab.icon}
+                  size={20}
+                  color={isDisabled ? '#2a4a60' : isActive ? '#00ADD8' : '#4a6a80'}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    isActive && styles.tabLabelActive,
+                    isDisabled && styles.tabLabelDisabled,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+                {isDisabled && (
+                  <View style={styles.soonBadge}>
+                    <Text style={styles.soonText}>soon</Text>
+                  </View>
+                )}
+                {isActive && <View style={styles.activeIndicator} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      <TouchableOpacity style={styles.btnEdit} onPress={() => router.push('/edit-profile')}>
-        <Text style={styles.btnText}>Editar perfil</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
-        <Text style={styles.btnText}>Cerrar sesión</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.btnDelete} onPress={handleDelete}>
-        <Text style={styles.btnText}>Eliminar cuenta</Text>
-      </TouchableOpacity>
-    </View>
+      {/* Tab content */}
+      <View style={styles.content}>
+        {TabContent ? (
+          <TabContent />
+        ) : (
+          <View style={styles.comingSoon}>
+            <MaterialIcons name={current?.icon ?? 'hourglass-empty'} size={56} color="#1e3a5a" />
+            <Text style={styles.comingSoonTitle}>{current?.label}</Text>
+            <Text style={styles.comingSoonSub}>Próximamente</Text>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f2f5', padding: 20, justifyContent: 'center' },
-  error: { color: '#ff4444', textAlign: 'center', marginBottom: 10 },
-  profileCard: { backgroundColor: '#fff', padding: 30, borderRadius: 20, alignItems: 'center', elevation: 5, marginBottom: 20 },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#00ADD8', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
-  avatarText: { color: '#fff', fontSize: 30, fontWeight: 'bold' },
-  name: { fontSize: 22, fontWeight: 'bold', color: '#333' },
-  email: { color: '#777', marginTop: 4 },
-  btnEdit: { backgroundColor: '#00ADD8', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
-  btnLogout: { backgroundColor: '#888', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
-  btnDelete: { backgroundColor: '#ff4444', padding: 15, borderRadius: 10, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: 'bold' },
+  root: {
+    flex: 1,
+    backgroundColor: '#0a1628',
+    paddingTop: Platform.OS === 'android' ? 32 : 0,
+  },
+  tabBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#132238',
+  },
+  tabBarInner: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    position: 'relative',
+  },
+  tabActive: {},
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4a6a80',
+  },
+  tabLabelActive: {
+    color: '#00ADD8',
+  },
+  tabLabelDisabled: {
+    color: '#2a4a60',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 16,
+    right: 16,
+    height: 2,
+    backgroundColor: '#00ADD8',
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+  },
+  soonBadge: {
+    backgroundColor: '#132238',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginLeft: 2,
+  },
+  soonText: {
+    color: '#2a4a60',
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  content: {
+    flex: 1,
+  },
+  comingSoon: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  comingSoonTitle: {
+    color: '#4a6a80',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  comingSoonSub: {
+    color: '#2a4a60',
+    fontSize: 14,
+  },
 });

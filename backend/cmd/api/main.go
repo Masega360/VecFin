@@ -18,6 +18,7 @@ import (
 	"github.com/Masega360/vecfin/backend/config"
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
+	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
 )
@@ -60,6 +61,12 @@ func main() {
 	authUC := usecase.NewAuthUsecase(userRepo, cfg.JWTSecret, googleVerifier)
 	authHandler := handler.NewAuthHandler(authUC)
 	authHandler.RegisterRoutes()
+
+	yahooClient := yahoo.NewClient()
+	assetRepo := repository.NewPostgresAssetRepository(db)
+	marketUC := usecase.NewMarketUsecase(yahooClient, assetRepo)
+	marketHandler := handler.NewMarketHandler(marketUC)
+	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
