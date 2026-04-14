@@ -6,6 +6,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 
 import AssetsTab from '@/components/tabs/AssetsTab';
+import WalletsTab from '@/components/tabs/WalletsTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
@@ -26,6 +27,12 @@ const TABS: TabConfig[] = [
     label: 'Assets',
     icon: 'trending-up',
     component: AssetsTab,
+  },
+  {
+    id: 'wallets',
+    label: 'Wallets',
+    icon: 'account-balance-wallet',
+    component: WalletsTab,
   },
   {
     id: 'community',

@@ -78,6 +78,11 @@ func main() {
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
+	platformRepo := repository.NewPostgresPlatformRepository(db)
+	platformUC := usecase.NewPlatformUsecase(platformRepo)
+	platformHandler := handler.NewPlatformHandler(platformUC)
+	platformHandler.RegisterRoutes(cfg.JWTSecret)
+
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
