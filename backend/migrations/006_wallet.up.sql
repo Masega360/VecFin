@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS wallet (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL, -- Clave foránea a tu tabla de usuarios
-    plataform_id UUID NOT NULL,
+    platform_id UUID NOT NULL,
     name VARCHAR(255), -- Ej: "Mi cuenta de ahorros Binance"
     api_key VARCHAR(255) NOT NULL,
     api_secret VARCHAR(255) NOT NULL, 
@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS wallet (
     last_sync TIMESTAMP WITH TIME ZONE,
     
     -- La restricción FK asegura que no se pueda crear una wallet 
-    -- para una plataforma que no existe en tu tabla 'plataform'
-    CONSTRAINT fk_plataform 
-        FOREIGN KEY (plataform_id) 
-        REFERENCES plataform(id)
+    -- para una plataforma que no existe en tu tabla 'platform'
+    CONSTRAINT fk_platform
+        FOREIGN KEY (platform_id)
+        REFERENCES platform(id)
         ON DELETE RESTRICT
 );

@@ -14,18 +14,20 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
-	"github.com/rs/cors"
 	"github.com/Masega360/vecfin/backend/config"
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
+	"github.com/rs/cors"
 )
 
 func main() {
 	// En Docker las vars vienen del compose; godotenv solo aplica en desarrollo local
-	godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		log.Println("Aviso: no se encontró .env, usando variables de entorno del sistema")
+	}
 
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
@@ -71,9 +73,16 @@ func main() {
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
+	walletRepo := repository.NewPostgresWalletRepository(db)
+	walletUC := usecase.NewWalletsUseCase(walletRepo)
+	walletHandler := handler.NewWalletHandler(walletUC)
+	walletHandler.RegisterRoutes(cfg.JWTSecret)
+
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+			log.Println("Error escribiendo respuesta de health:", err)
+		}
 	})
 
 	c := cors.New(cors.Options{

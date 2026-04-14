@@ -6,28 +6,28 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/domain"
 )
 
-type PostgresPlataformRepository struct {
+type PostgresPlatformRepository struct {
 	db *sql.DB
 }
 
-func NewPostgresPlataformRepository(db *sql.DB) *PostgresPlataformRepository {
-	return &PostgresPlataformRepository{db: db}
+func NewPostgresPlatformRepository(db *sql.DB) *PostgresPlatformRepository {
+	return &PostgresPlatformRepository{db: db}
 }
 
-func (r *PostgresPlataformRepository) List() ([]domain.Plataform, error) {
-	query := `SELECT id, name, description FROM plataforms`
+func (r *PostgresPlatformRepository) List() ([]domain.Platform, error) {
+	query := `SELECT id, name, description FROM platform`
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var plataforms []domain.Plataform
+	var platform []domain.Platform
 	for rows.Next() {
-		var p domain.Plataform
+		var p domain.Platform
 		if err := rows.Scan(&p.ID, &p.Name, &p.Description); err != nil {
 			return nil, err
 		}
-		plataforms = append(plataforms, p)
+		platform = append(platform, p)
 	}
-	return plataforms, rows.Err()
+	return platform, rows.Err()
 }
