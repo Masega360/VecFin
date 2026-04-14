@@ -1,8 +1,9 @@
 package domain
 
 import (
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Wallet struct {
@@ -13,4 +14,5 @@ type Wallet struct {
 	APIKey      string    `json:"api_key"`
 	APISecret   string    `json:"-"` // Oculto al serializar la respuesta HTTP
 	CreatedAt   time.Time `json:"created_at"`
+	LastSync    time.Time `json:"last_sync"`
 }

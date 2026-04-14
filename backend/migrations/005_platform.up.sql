@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS plataform (
     description TEXT
 );
 
-INSERT INTO plataform (name, description) 
-VALUES 
-    ('Binance', 'Exchange de criptoactivos');
+INSERT INTO plataform (name, description)
+VALUES
+    ('Binance', 'Exchange de criptoactivos'),
+    ('custom', 'datos cargados manualmente');

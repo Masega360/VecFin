@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS wallet (
     api_key VARCHAR(255) NOT NULL,
     api_secret VARCHAR(255) NOT NULL, 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_sync TIMESTAMP WITH TIME ZONE,
     
     -- La restricción FK asegura que no se pueda crear una wallet 
     -- para una plataforma que no existe en tu tabla 'plataform'
