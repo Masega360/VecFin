@@ -7,6 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 import AssetsTab from '@/components/tabs/AssetsTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
+import CommunityTab from '@/components/tabs/CommunityTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -31,7 +32,7 @@ const TABS: TabConfig[] = [
     id: 'community',
     label: 'Comunidad',
     icon: 'people',
-    component: null, // próximamente
+    component: CommunityTab, 
   },
   {
     id: 'profile',

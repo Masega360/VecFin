@@ -14,13 +14,13 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
-	"github.com/rs/cors"
 	"github.com/Masega360/vecfin/backend/config"
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -70,6 +70,16 @@ func main() {
 	marketUC := usecase.NewMarketUsecase(yahooClient, assetRepo)
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
+
+	commRepo := repository.NewPostgresCommunityRepository(db)
+	commUC := usecase.NewCommunityUsecase(commRepo)
+	commHandler := handler.NewCommunityHandler(commUC)
+	commHandler.RegisterRoutes(cfg.JWTSecret)
+
+	postRepo := repository.NewPostgresPostRepository(db)
+	postUC := usecase.NewPostUsecase(postRepo, commRepo)
+	postHandler := handler.NewPostHandler(postUC)
+	postHandler.RegisterRoutes(cfg.JWTSecret)
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

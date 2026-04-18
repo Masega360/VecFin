@@ -19,17 +19,17 @@ func NewUserUsecase(repo domain.UserRepository) *UserUsecase {
 
 func (u *UserUsecase) Create(firstName, lastName, email, password string) error {
 	if firstName == "" || lastName == "" {
-		return errors.New("el nombre y el apellido no pueden estar vacíos")
+		return errors.New("El nombre y el apellido no pueden estar vacíos")
 	}
 	if email == "" {
-		return errors.New("el email es obligatorio")
+		return errors.New("El email es obligatorio")
 	}
 	if len(password) < 8 {
-		return errors.New("la contraseña debe tener al menos 8 caracteres")
+		return errors.New("La contraseña debe tener al menos 8 caracteres")
 	}
 
 	if _, err := u.repo.FindByEmail(email); err == nil {
-		return errors.New("el email ya está registrado")
+		return errors.New("El email ya está registrado")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

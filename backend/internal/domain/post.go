@@ -1,0 +1,58 @@
+package domain
+
+import (
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type Post struct {
+	ID          uuid.UUID  `json:"id"`
+	CommunityID uuid.UUID  `json:"community_id"`
+	ParentID    *uuid.UUID `json:"parent_id,omitempty"` // Nil = Post, UUID = Comentario
+	AuthorID    uuid.UUID  `json:"author_id"`
+
+	Title   string `json:"title,omitempty"`
+	Content string `json:"content"`
+	URL     string `json:"url,omitempty"`
+
+	Upvotes      int `json:"upvotes"`
+	Downvotes    int `json:"downvotes"`
+	CommentCount int `json:"comment_count"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type PostRepository interface {
+	Create(post Post) error
+	FindByID(id uuid.UUID) (Post, error)
+	FindByCommunityID(communityID uuid.UUID) ([]Post, error)
+	FindRepliesByPostID(parentID uuid.UUID) ([]Post, error)
+	SearchPostsInCommunity(communityID uuid.UUID, query string) ([]Post, error)
+	Update(post Post) error
+	Delete(id uuid.UUID) error
+}
+
+func (p *Post) Edit(title, content, url string) error {
+	if title == "" || content == "" {
+		return errors.New("El post debe tener un título o contenido")
+	}
+	p.Title = title
+	p.Content = content
+	p.URL = url
+	p.UpdatedAt = time.Now()
+	return nil
+}
+func (p *Post) Upvote() {
+	p.Upvotes++
+}
+
+func (p *Post) Downvote() {
+	p.Downvotes++
+}
+
+func (p *Post) IncrementCommentCount() {
+	p.CommentCount++
+}
