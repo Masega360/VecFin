@@ -1,0 +1,3 @@
+ALTER TABLE wallet
+    ALTER COLUMN api_key SET NOT NULL,
+    ALTER COLUMN api_secret SET NOT NULL;

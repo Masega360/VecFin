@@ -1,0 +1,30 @@
+classDiagram
+    class WalletDTO{
+        <<Struct>>
+        ID uuid
+        UserID uuid
+        PlataformID uuid
+        Name string
+        APIKey string
+        APISecret string
+        CreatedAt timeStamp
+        LastSync timeStamp
+
+    }
+    class WalletHandler{
+        SearchWallets(query string) wallet
+        GetWalletDetails(id string) wallet
+        ConnectWalletAPI()
+        AddAsset(asset)
+        CreateWallet(wallet)
+        GetWalletAssets(id string) assets[]
+    }
+    class WalletRepository{
+        - CreateWallet(wallet)id
+        - ReadWallet(id) wallet
+        - UpdateWallet(id, wallet)
+        - DeleteWallet(id)
+    }
+
+    WalletDTO --> WalletHandler: usa
+    WalletHandler --> WalletRepository: pushea a

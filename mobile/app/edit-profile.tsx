@@ -20,6 +20,12 @@ export default function EditProfileScreen() {
 
   useEffect(() => { loadProfile(); }, []);
 
+  // Fallback si no hay historial (deep link / refresh en web)
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace({ pathname: '/home', params: { tab: 'profile' } });
+  };
+
   const loadProfile = async () => {
     const token = await getValidToken();
     if (!token) return;
@@ -91,7 +97,7 @@ export default function EditProfileScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack}>
           <MaterialIcons name="arrow-back" size={20} color="#8aaabf" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Editar perfil</Text>
@@ -131,7 +137,7 @@ export default function EditProfileScreen() {
           }
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btnSecondary} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.btnSecondary} onPress={goBack}>
           <Text style={styles.btnText}>Cancelar</Text>
         </TouchableOpacity>
       </ScrollView>
