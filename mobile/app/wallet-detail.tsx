@@ -96,15 +96,8 @@ export default function WalletDetailScreen() {
 
   useEffect(() => { loadDetails(); }, [walletId]);
 
-  // El back de wallet-detail siempre debe volver a la tab Wallets.
   const goBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      // Si no hay historial (ej. abrieron la app desde un link),
-      // ahí sí redirigís a un lugar seguro.
-      router.replace('/home');
-    }
+    router.navigate({ pathname: '/home', params: { tab: 'wallets' } });
   };
   // ─── API ───────────────────────────────────────────────────────────────────
 
