@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  TextInput, ActivityIndicator, Alert, Platform, KeyboardAvoidingView,
+  TextInput, ActivityIndicator, Platform, KeyboardAvoidingView,
   Modal, ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -32,6 +32,12 @@ interface WalletDetails {
   assets: WalletAssetView[];
   total_value: number;
   currency?: string;
+}
+
+interface AssetSuggestion {
+  symbol: string;
+  name: string;
+  type: string;
 }
 
 type ScreenView = 'detail' | 'addAsset';
@@ -72,8 +78,15 @@ export default function WalletDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [formError,  setFormError]  = useState('');
 
+  // typeahead de tickers (Yahoo search)
+  const [suggestions,        setSuggestions]        = useState<AssetSuggestion[]>([]);
+  const [searchingSuggestions, setSearchingSuggestions] = useState(false);
+  const [pickedSuggestion,   setPickedSuggestion]   = useState<AssetSuggestion | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // delete
-  const [deletingTicker, setDeletingTicker] = useState<string | null>(null);
+  const [deletingTicker,       setDeletingTicker]       = useState<string | null>(null);
+  const [confirmDeleteTicker,  setConfirmDeleteTicker]  = useState<string | null>(null);
 
   // edit quantity modal
   const [editTicker,    setEditTicker]    = useState<string | null>(null);
@@ -83,6 +96,16 @@ export default function WalletDetailScreen() {
 
   useEffect(() => { loadDetails(); }, [walletId]);
 
+  // El back de wallet-detail siempre debe volver a la tab Wallets.
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // Si no hay historial (ej. abrieron la app desde un link),
+      // ahí sí redirigís a un lugar seguro.
+      router.replace('/home');
+    }
+  };
   // ─── API ───────────────────────────────────────────────────────────────────
 
   const loadDetails = useCallback(async (isRefresh = false) => {
@@ -113,6 +136,48 @@ export default function WalletDetailScreen() {
       setRefreshing(false);
     }
   }, [walletId]);
+
+  // ─── Búsqueda de tickers (typeahead) ──────────────────────────────────────
+
+  // Dispara búsqueda en Yahoo con debounce. Cancela la anterior si el user sigue tipeando.
+  const onTickerChange = (raw: string) => {
+    const val = raw.toUpperCase();
+    setTicker(val);
+    setPickedSuggestion(null);
+    setFormError('');
+
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = val.trim();
+    if (q.length < 1) {
+      setSuggestions([]);
+      setSearchingSuggestions(false);
+      return;
+    }
+
+    setSearchingSuggestions(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/assets/search?query=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data: AssetSuggestion[] = await res.json();
+          setSuggestions(Array.isArray(data) ? data.slice(0, 8) : []);
+        } else {
+          setSuggestions([]);
+        }
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearchingSuggestions(false);
+      }
+    }, 300);
+  };
+
+  const pickSuggestion = (s: AssetSuggestion) => {
+    setTicker(s.symbol);
+    setPickedSuggestion(s);
+    setSuggestions([]);
+    setFormError('');
+  };
 
   const handleAddAsset = async () => {
     const tickerClean = ticker.trim().toUpperCase();
@@ -149,30 +214,28 @@ export default function WalletDetailScreen() {
     }
   };
 
+  // Abre el modal de confirmación (Alert.alert no funciona en react-native-web con botones)
   const handleDeleteAsset = (asset: WalletAssetView) => {
-    Alert.alert(
-      'Eliminar activo',
-      `¿Eliminar ${asset.ticker} de esta wallet?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => confirmDelete(asset.ticker),
-        },
-      ],
-    );
+    setConfirmDeleteTicker(asset.ticker);
   };
 
-  const confirmDelete = async (ticker: string) => {
+  const confirmDelete = async () => {
+    const ticker = confirmDeleteTicker;
+    if (!ticker) return;
+    setConfirmDeleteTicker(null);
     setDeletingTicker(ticker);
+
     const token = await getValidToken();
     if (!token) { setDeletingTicker(null); return; }
+
     try {
-      const res = await fetch(`${API_URL}/wallets/${walletId}/assets/${encodeURIComponent(ticker)}`, {
+      const url = `${API_URL}/wallets/${walletId}/assets/${encodeURIComponent(ticker)}`;
+      console.log('[DELETE asset]', url);
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+
       if (res.ok) {
         setDetails(prev => prev ? {
           ...prev,
@@ -182,10 +245,13 @@ export default function WalletDetailScreen() {
             .reduce((sum, a) => sum + (a.market_value || 0), 0),
         } : prev);
       } else {
-        Alert.alert('Error', 'No se pudo eliminar el activo');
+        const msg = await res.text();
+        console.warn('[DELETE asset] failed', res.status, msg);
+        setListError(`No se pudo eliminar (${res.status})`);
       }
-    } catch {
-      Alert.alert('Error', 'Sin conexión al servidor');
+    } catch (e) {
+      console.warn('[DELETE asset] error', e);
+      setListError('Sin conexión al servidor');
     } finally {
       setDeletingTicker(null);
     }
@@ -267,16 +333,75 @@ export default function WalletDetailScreen() {
         <ScrollView contentContainerStyle={styles.formBody} keyboardShouldPersistTaps="handled">
           {/* Ticker */}
           <Text style={styles.label}>Ticker</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: AAPL, BTC, ETH"
-            placeholderTextColor="#4a6a80"
-            value={ticker}
-            onChangeText={t => setTicker(t.toUpperCase())}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            returnKeyType="next"
-          />
+          <View>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej: BTC-USD, AAPL, ETH-USD"
+              placeholderTextColor="#4a6a80"
+              value={ticker}
+              onChangeText={onTickerChange}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="next"
+            />
+            {searchingSuggestions ? (
+              <ActivityIndicator
+                size="small"
+                color="#00ADD8"
+                style={styles.suggestSpinner}
+              />
+            ) : null}
+          </View>
+
+          {/* Sugerencias de Yahoo */}
+          {suggestions.length > 0 && !pickedSuggestion ? (
+            <View style={styles.suggestBox}>
+              {suggestions.map((s, i) => (
+                <TouchableOpacity
+                  key={`${s.symbol}-${i}`}
+                  style={[
+                    styles.suggestRow,
+                    i < suggestions.length - 1 && styles.suggestRowBorder,
+                  ]}
+                  onPress={() => pickSuggestion(s)}
+                  activeOpacity={0.65}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.suggestSymbol}>{s.symbol}</Text>
+                    <Text style={styles.suggestName} numberOfLines={1}>
+                      {s.name || '—'}
+                    </Text>
+                  </View>
+                  {s.type ? (
+                    <View style={styles.suggestBadge}>
+                      <Text style={styles.suggestBadgeText}>{s.type}</Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Activo seleccionado */}
+          {pickedSuggestion ? (
+            <View style={styles.pickedBox}>
+              <MaterialIcons name="check-circle" size={16} color="#00ADD8" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickedName} numberOfLines={1}>
+                  {pickedSuggestion.name}
+                </Text>
+                <Text style={styles.pickedType}>
+                  {pickedSuggestion.type?.toUpperCase() || 'ASSET'} · {pickedSuggestion.symbol}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => { setPickedSuggestion(null); setTicker(''); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="close" size={16} color="#4a6a80" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {/* Quantity */}
           <Text style={styles.label}>Cantidad</Text>
@@ -329,7 +454,7 @@ export default function WalletDetailScreen() {
     <View style={styles.root}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={22} color="#8aaabf" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -369,49 +494,71 @@ export default function WalletDetailScreen() {
           onRefresh={() => loadDetails(true)}
           refreshing={refreshing}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.assetCard}
-              onPress={() => openEdit(item)}
-            >
-              {/* Ticker icon */}
-              <View style={styles.assetIcon}>
-                <Text style={styles.assetIconText}>
-                  {item.ticker.slice(0, 3).toUpperCase()}
-                </Text>
-              </View>
-
-              {/* Info */}
-              <View style={styles.assetBody}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.assetTicker}>{item.ticker}</Text>
-                  <Text style={styles.assetMarketValue}>
-                    {item.market_value > 0 ? formatMoney(item.market_value, item.currency || currency) : '—'}
+            <View style={styles.assetCard}>
+              {/* Body tapeable → vista del asset en Yahoo */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.assetBodyTouchable}
+                onPress={() =>
+                  router.push({
+                    pathname: '/asset-detail',
+                    params: {
+                      symbol: item.ticker,
+                      name: item.name || item.ticker,
+                      from: 'wallets',   // para que el back vuelva a la tab Wallets
+                    },
+                  })
+                }
+              >
+                {/* Ticker icon */}
+                <View style={styles.assetIcon}>
+                  <Text style={styles.assetIconText}>
+                    {item.ticker.slice(0, 3).toUpperCase()}
                   </Text>
                 </View>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.assetQty}>
-                    {formatQty(item.quantity)} × {item.price > 0 ? formatMoney(item.price, item.currency || currency) : '—'}
-                  </Text>
-                </View>
-                {item.name ? (
-                  <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>
-                ) : null}
-              </View>
 
-              {/* Delete */}
-              {deletingTicker === item.ticker ? (
-                <ActivityIndicator size="small" color="#ff6666" />
-              ) : (
+                {/* Info */}
+                <View style={styles.assetBody}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.assetTicker}>{item.ticker}</Text>
+                    <Text style={styles.assetMarketValue}>
+                      {item.market_value > 0 ? formatMoney(item.market_value, item.currency || currency) : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.assetQty}>
+                      {formatQty(item.quantity)} × {item.price > 0 ? formatMoney(item.price, item.currency || currency) : '—'}
+                    </Text>
+                  </View>
+                  {item.name ? (
+                    <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+
+              {/* Acciones: editar y borrar */}
+              <View style={styles.actions}>
                 <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleDeleteAsset(item)}
+                  style={styles.actionBtn}
+                  onPress={() => openEdit(item)}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <MaterialIcons name="delete-outline" size={20} color="#4a6a80" />
+                  <MaterialIcons name="edit" size={20} color="#00ADD8" />
                 </TouchableOpacity>
-              )}
-            </TouchableOpacity>
+
+                {deletingTicker === item.ticker ? (
+                  <ActivityIndicator size="small" color="#ff6666" style={styles.actionBtn} />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => handleDeleteAsset(item)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <MaterialIcons name="delete-outline" size={20} color="#ff6666" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -427,6 +574,41 @@ export default function WalletDetailScreen() {
       <TouchableOpacity style={styles.fab} onPress={() => setView('addAsset')} activeOpacity={0.8}>
         <MaterialIcons name="add" size={28} color="#fff" />
       </TouchableOpacity>
+
+      {/* Confirm delete modal (reemplaza Alert.alert porque no anda en react-native-web) */}
+      <Modal
+        visible={!!confirmDeleteTicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDeleteTicker(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Eliminar activo</Text>
+            <Text style={[styles.modalTicker, { color: '#ff6666' }]}>
+              {confirmDeleteTicker}
+            </Text>
+            <Text style={[styles.hint, { marginTop: 12 }]}>
+              ¿Seguro que querés eliminarlo de esta wallet? Esta acción no se puede deshacer.
+            </Text>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => setConfirmDeleteTicker(null)}
+              >
+                <Text style={styles.modalBtnGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnDanger]}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.modalBtnPrimaryText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Edit quantity modal */}
       <Modal
@@ -525,7 +707,10 @@ const styles = StyleSheet.create({
   assetCard: {
     backgroundColor: '#132238', borderRadius: 16, padding: 14, marginBottom: 10,
     borderWidth: 1, borderColor: '#1e3a5a',
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  assetBodyTouchable: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14,
   },
   assetIcon: {
     width: 48, height: 48, borderRadius: 24,
@@ -538,7 +723,8 @@ const styles = StyleSheet.create({
   assetMarketValue: { color: '#00ADD8', fontWeight: '700', fontSize: 14 },
   assetQty:      { color: '#8aaabf', fontSize: 12, marginTop: 3 },
   assetName:     { color: '#4a6a80', fontSize: 11, marginTop: 2 },
-  deleteBtn:     { padding: 4 },
+  actions:       { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
+  actionBtn:     { padding: 6, marginLeft: 2 },
 
   // empty
   empty:      { alignItems: 'center', marginTop: 80, gap: 12 },
@@ -606,5 +792,60 @@ const styles = StyleSheet.create({
   modalBtnGhost:       { backgroundColor: '#132238', borderWidth: 1, borderColor: '#1e3a5a' },
   modalBtnGhostText:   { color: '#8aaabf', fontWeight: '600' },
   modalBtnPrimary:     { backgroundColor: '#00ADD8' },
+  modalBtnDanger:      { backgroundColor: '#ff6666' },
   modalBtnPrimaryText: { color: '#fff', fontWeight: '700' },
+
+  // typeahead (sugerencias de Yahoo)
+  suggestSpinner: {
+    position: 'absolute', right: 12, top: 0, bottom: 0,
+    justifyContent: 'center',
+  },
+  suggestBox: {
+    backgroundColor: '#132238',
+    borderWidth: 1, borderColor: '#1e3a5a',
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  suggestRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 10,
+    gap: 10,
+  },
+  suggestRowBorder: {
+    borderBottomWidth: 1, borderBottomColor: '#1e3a5a',
+  },
+  suggestSymbol: {
+    color: '#00ADD8', fontWeight: '700', fontSize: 14,
+  },
+  suggestName: {
+    color: '#8aaabf', fontSize: 12, marginTop: 2,
+  },
+  suggestBadge: {
+    backgroundColor: '#0a1628',
+    borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: '#1e3a5a',
+  },
+  suggestBadgeText: {
+    color: '#8aaabf', fontSize: 10, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+
+  // activo "picked" (elegido de las sugerencias)
+  pickedBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#00ADD815',
+    borderWidth: 1, borderColor: '#00ADD840',
+    borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
+    marginTop: 8,
+  },
+  pickedName: {
+    color: '#fff', fontSize: 13, fontWeight: '600',
+  },
+  pickedType: {
+    color: '#8aaabf', fontSize: 11, marginTop: 2,
+    letterSpacing: 0.5,
+  },
 });
