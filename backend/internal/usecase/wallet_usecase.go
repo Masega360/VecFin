@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -17,12 +18,26 @@ type walletRepository interface {
 	DeleteWallet(ctx context.Context, id uuid.UUID) error
 }
 
+// ErrInvalidQuantity se devuelve cuando la cantidad no es estrictamente positiva.
+var ErrInvalidQuantity = errors.New("cantidad inválida: debe ser mayor a cero")
+
+// ErrInvalidTicker se devuelve cuando el ticker es vacío.
+var ErrInvalidTicker = errors.New("ticker inválido: no puede estar vacío")
+
 type WalletsUseCase struct {
-	repo walletRepository
+	repo       walletRepository
+	assetsRepo domain.AssetWalletRepository
+	market     domain.MarketService
 }
 
-func NewWalletsUseCase(repo walletRepository) *WalletsUseCase {
-	return &WalletsUseCase{repo: repo}
+// NewWalletsUseCase construye el usecase. assetsRepo y market pueden ser nil
+// si el caller no necesita operaciones sobre assets.
+func NewWalletsUseCase(
+	repo walletRepository,
+	assetsRepo domain.AssetWalletRepository,
+	market domain.MarketService,
+) *WalletsUseCase {
+	return &WalletsUseCase{repo: repo, assetsRepo: assetsRepo, market: market}
 }
 
 func (uc *WalletsUseCase) Create(ctx context.Context, wallet domain.Wallet) (uuid.UUID, error) {
@@ -93,4 +108,135 @@ func (uc *WalletsUseCase) Delete(ctx context.Context, id, userID uuid.UUID) erro
 		return domain.ErrForbidden
 	}
 	return uc.repo.DeleteWallet(ctx, id)
+}
+
+// ─── ASSETS DENTRO DE UNA WALLET ─────────────────────────────────────────────
+
+// ensureOwner valida que la wallet exista y pertenezca al usuario.
+func (uc *WalletsUseCase) ensureOwner(ctx context.Context, walletID, userID uuid.UUID) error {
+	w, err := uc.repo.ReadWallet(ctx, walletID)
+	if err != nil {
+		return err
+	}
+	if w.UserID != userID {
+		return domain.ErrForbidden
+	}
+	return nil
+}
+
+// AddAsset agrega una tenencia. Si el ticker ya existe en la wallet, suma la cantidad.
+func (uc *WalletsUseCase) AddAsset(
+	ctx context.Context,
+	walletID, userID uuid.UUID,
+	ticker string,
+	quantity float64,
+) (domain.AssetWallet, error) {
+	if ticker == "" {
+		return domain.AssetWallet{}, ErrInvalidTicker
+	}
+	if quantity <= 0 {
+		return domain.AssetWallet{}, ErrInvalidQuantity
+	}
+	if err := uc.ensureOwner(ctx, walletID, userID); err != nil {
+		return domain.AssetWallet{}, err
+	}
+	return uc.assetsRepo.Add(ctx, walletID, ticker, quantity)
+}
+
+// ListAssets devuelve las tenencias crudas de la wallet.
+func (uc *WalletsUseCase) ListAssets(
+	ctx context.Context,
+	walletID, userID uuid.UUID,
+) ([]domain.AssetWallet, error) {
+	if err := uc.ensureOwner(ctx, walletID, userID); err != nil {
+		return nil, err
+	}
+	return uc.assetsRepo.ListByWallet(ctx, walletID)
+}
+
+// UpdateAssetQuantity reemplaza (no suma) la cantidad de un ticker.
+func (uc *WalletsUseCase) UpdateAssetQuantity(
+	ctx context.Context,
+	walletID, userID uuid.UUID,
+	ticker string,
+	quantity float64,
+) error {
+	if ticker == "" {
+		return ErrInvalidTicker
+	}
+	if quantity < 0 {
+		return ErrInvalidQuantity
+	}
+	if err := uc.ensureOwner(ctx, walletID, userID); err != nil {
+		return err
+	}
+	return uc.assetsRepo.UpdateQuantity(ctx, walletID, ticker, quantity)
+}
+
+// RemoveAsset elimina un ticker de la wallet.
+func (uc *WalletsUseCase) RemoveAsset(
+	ctx context.Context,
+	walletID, userID uuid.UUID,
+	ticker string,
+) error {
+	if ticker == "" {
+		return ErrInvalidTicker
+	}
+	if err := uc.ensureOwner(ctx, walletID, userID); err != nil {
+		return err
+	}
+	return uc.assetsRepo.Remove(ctx, walletID, ticker)
+}
+
+// GetWalletDetails devuelve la wallet con cada asset valuado al precio actual
+// y el total de la wallet. Si el market service falla para un ticker, el asset
+// se devuelve igualmente pero con Price=0 (no tira todo el endpoint).
+func (uc *WalletsUseCase) GetWalletDetails(
+	ctx context.Context,
+	walletID, userID uuid.UUID,
+) (domain.WalletDetails, error) {
+	wallet, err := uc.repo.ReadWallet(ctx, walletID)
+	if err != nil {
+		return domain.WalletDetails{}, err
+	}
+	if wallet.UserID != userID {
+		return domain.WalletDetails{}, domain.ErrForbidden
+	}
+
+	assets, err := uc.assetsRepo.ListByWallet(ctx, walletID)
+	if err != nil {
+		return domain.WalletDetails{}, err
+	}
+
+	views := make([]domain.WalletAssetView, 0, len(assets))
+	var total float64
+	var currency string
+
+	for _, a := range assets {
+		view := domain.WalletAssetView{
+			Ticker:   a.Ticker,
+			Quantity: a.Quantity,
+		}
+		if uc.market != nil {
+			// "1d" es el rango mínimo soportado por el proveedor Yahoo
+			if details, derr := uc.market.GetAssetDetails(a.Ticker, "1d"); derr == nil && details != nil {
+				view.Name = details.Name
+				view.Price = details.Price
+				view.Currency = details.Currency
+				view.MarketValue = a.Quantity * details.Price
+				if currency == "" {
+					currency = details.Currency
+				}
+			}
+		}
+		total += view.MarketValue
+		views = append(views, view)
+	}
+
+	return domain.WalletDetails{
+		Wallet:     wallet,
+		Assets:     views,
+		TotalValue: total,
+		Currency:   currency,
+	}, nil
 }

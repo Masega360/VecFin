@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
   TextInput, ActivityIndicator, Alert, Platform, KeyboardAvoidingView,
+  Modal, ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,14 +10,43 @@ import { API_URL, getValidToken } from '@/utils/api';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
-interface WalletAsset {
-  id: string;
-  wallet_id: string;
+interface WalletAssetView {
   ticker: string;
+  name?: string;
   quantity: number;
+  price: number;
+  currency?: string;
+  market_value: number;
+}
+
+interface WalletInfo {
+  id: string;
+  name: string;
+  platform_id: string;
+  created_at: string;
+  last_sync?: string;
+}
+
+interface WalletDetails {
+  wallet: WalletInfo;
+  assets: WalletAssetView[];
+  total_value: number;
+  currency?: string;
 }
 
 type ScreenView = 'detail' | 'addAsset';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const formatMoney = (n: number, ccy = 'USD') =>
+  new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: ccy || 'USD',
+    maximumFractionDigits: 2,
+  }).format(n || 0);
+
+const formatQty = (n: number) =>
+  Number(n).toLocaleString('es-AR', { maximumFractionDigits: 8 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -27,13 +57,14 @@ export default function WalletDetailScreen() {
   }>();
   const router = useRouter();
 
-  // assets list
-  const [assets,     setAssets]     = useState<WalletAsset[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [listError,  setListError]  = useState('');
+  // details + assets (valuados)
+  const [details,   setDetails]   = useState<WalletDetails | null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [listError, setListError] = useState('');
 
   // view
-  const [view,       setView]       = useState<ScreenView>('detail');
+  const [view, setView] = useState<ScreenView>('detail');
 
   // add-asset form
   const [ticker,     setTicker]     = useState('');
@@ -42,25 +73,34 @@ export default function WalletDetailScreen() {
   const [formError,  setFormError]  = useState('');
 
   // delete
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingTicker, setDeletingTicker] = useState<string | null>(null);
 
-  useEffect(() => { loadAssets(); }, [walletId]);
+  // edit quantity modal
+  const [editTicker,    setEditTicker]    = useState<string | null>(null);
+  const [editQuantity,  setEditQuantity]  = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError,     setEditError]     = useState('');
+
+  useEffect(() => { loadDetails(); }, [walletId]);
 
   // ─── API ───────────────────────────────────────────────────────────────────
 
-  const loadAssets = useCallback(async () => {
+  const loadDetails = useCallback(async (isRefresh = false) => {
     if (!walletId) return;
-    setLoading(true);
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     setListError('');
     const token = await getValidToken();
-    if (!token) return;
+    if (!token) { setLoading(false); setRefreshing(false); return; }
     try {
-      const res = await fetch(`${API_URL}/wallets/${walletId}/assets`, {
+      const res = await fetch(`${API_URL}/wallets/${walletId}/details`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        setAssets(Array.isArray(data) ? data : []);
+        const data: WalletDetails = await res.json();
+        setDetails({
+          ...data,
+          assets: Array.isArray(data.assets) ? data.assets : [],
+        });
       } else if (res.status === 404) {
         setListError('Wallet no encontrada');
       } else {
@@ -70,6 +110,7 @@ export default function WalletDetailScreen() {
       setListError('Sin conexión al servidor');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [walletId]);
 
@@ -83,7 +124,7 @@ export default function WalletDetailScreen() {
     setSubmitting(true);
     setFormError('');
     const token = await getValidToken();
-    if (!token) return;
+    if (!token) { setSubmitting(false); return; }
 
     try {
       const res = await fetch(`${API_URL}/wallets/${walletId}/assets`, {
@@ -96,7 +137,7 @@ export default function WalletDetailScreen() {
         setTicker('');
         setQuantity('');
         setView('detail');
-        loadAssets();
+        loadDetails();
       } else {
         const msg = await res.text();
         setFormError(msg || 'Error al agregar el activo');
@@ -108,7 +149,7 @@ export default function WalletDetailScreen() {
     }
   };
 
-  const handleDeleteAsset = (asset: WalletAsset) => {
+  const handleDeleteAsset = (asset: WalletAssetView) => {
     Alert.alert(
       'Eliminar activo',
       `¿Eliminar ${asset.ticker} de esta wallet?`,
@@ -117,30 +158,86 @@ export default function WalletDetailScreen() {
         {
           text: 'Eliminar',
           style: 'destructive',
-          onPress: () => confirmDelete(asset.id),
+          onPress: () => confirmDelete(asset.ticker),
         },
       ],
     );
   };
 
-  const confirmDelete = async (assetId: string) => {
-    setDeletingId(assetId);
+  const confirmDelete = async (ticker: string) => {
+    setDeletingTicker(ticker);
     const token = await getValidToken();
-    if (!token) { setDeletingId(null); return; }
+    if (!token) { setDeletingTicker(null); return; }
     try {
-      const res = await fetch(`${API_URL}/wallets/${walletId}/assets/${assetId}`, {
+      const res = await fetch(`${API_URL}/wallets/${walletId}/assets/${encodeURIComponent(ticker)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        setAssets(prev => prev.filter(a => a.id !== assetId));
+        setDetails(prev => prev ? {
+          ...prev,
+          assets: prev.assets.filter(a => a.ticker !== ticker),
+          total_value: prev.assets
+            .filter(a => a.ticker !== ticker)
+            .reduce((sum, a) => sum + (a.market_value || 0), 0),
+        } : prev);
       } else {
         Alert.alert('Error', 'No se pudo eliminar el activo');
       }
     } catch {
       Alert.alert('Error', 'Sin conexión al servidor');
     } finally {
-      setDeletingId(null);
+      setDeletingTicker(null);
+    }
+  };
+
+  // ─── Edit quantity ────────────────────────────────────────────────────────
+
+  const openEdit = (asset: WalletAssetView) => {
+    setEditTicker(asset.ticker);
+    setEditQuantity(String(asset.quantity));
+    setEditError('');
+  };
+
+  const closeEdit = () => {
+    setEditTicker(null);
+    setEditQuantity('');
+    setEditError('');
+  };
+
+  const submitEdit = async () => {
+    if (!editTicker) return;
+    const qty = parseFloat(editQuantity.replace(',', '.'));
+    if (isNaN(qty) || qty < 0) {
+      setEditError('La cantidad no puede ser negativa');
+      return;
+    }
+
+    setEditSubmitting(true);
+    setEditError('');
+    const token = await getValidToken();
+    if (!token) { setEditSubmitting(false); return; }
+
+    try {
+      const res = await fetch(
+        `${API_URL}/wallets/${walletId}/assets/${encodeURIComponent(editTicker)}`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: qty }),
+        },
+      );
+      if (res.ok) {
+        closeEdit();
+        loadDetails();
+      } else {
+        const msg = await res.text();
+        setEditError(msg || 'No se pudo actualizar la cantidad');
+      }
+    } catch {
+      setEditError('Sin conexión al servidor');
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -167,7 +264,7 @@ export default function WalletDetailScreen() {
           <View style={{ width: 30 }} />
         </View>
 
-        <View style={styles.formBody}>
+        <ScrollView contentContainerStyle={styles.formBody} keyboardShouldPersistTaps="handled">
           {/* Ticker */}
           <Text style={styles.label}>Ticker</Text>
           <TextInput
@@ -195,7 +292,8 @@ export default function WalletDetailScreen() {
 
           {/* Hint */}
           <Text style={styles.hint}>
-            Ingresá el símbolo del activo tal como aparece en la plataforma (ej: BTC, AAPL, ETH-USD).
+            Ingresá el símbolo del activo tal como aparece en la plataforma (ej: BTC-USD, AAPL, ETH-USD).
+            Si ya tenés ese ticker en la wallet, la cantidad se suma.
           </Text>
 
           {formError ? (
@@ -216,12 +314,16 @@ export default function WalletDetailScreen() {
               : <Text style={styles.submitBtnText}>Agregar activo</Text>
             }
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
   // ─── Render: detail + assets list ─────────────────────────────────────────
+
+  const assets = details?.assets ?? [];
+  const totalValue = details?.total_value ?? 0;
+  const currency = details?.currency || 'USD';
 
   return (
     <View style={styles.root}>
@@ -245,18 +347,33 @@ export default function WalletDetailScreen() {
         </View>
       ) : null}
 
+      {/* Valuación total */}
+      {!loading && assets.length > 0 && (
+        <View style={styles.totalCard}>
+          <Text style={styles.totalLabel}>Valor total</Text>
+          <Text style={styles.totalValue}>{formatMoney(totalValue, currency)}</Text>
+          <Text style={styles.totalSub}>
+            {assets.length} {assets.length === 1 ? 'activo' : 'activos'}
+          </Text>
+        </View>
+      )}
+
       {/* Assets list */}
       {loading ? (
         <ActivityIndicator size="large" color="#00ADD8" style={{ marginTop: 60 }} />
       ) : (
         <FlatList
           data={assets}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.ticker}
           contentContainerStyle={styles.list}
-          onRefresh={loadAssets}
-          refreshing={loading}
+          onRefresh={() => loadDetails(true)}
+          refreshing={refreshing}
           renderItem={({ item }) => (
-            <View style={styles.assetCard}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.assetCard}
+              onPress={() => openEdit(item)}
+            >
               {/* Ticker icon */}
               <View style={styles.assetIcon}>
                 <Text style={styles.assetIconText}>
@@ -266,14 +383,24 @@ export default function WalletDetailScreen() {
 
               {/* Info */}
               <View style={styles.assetBody}>
-                <Text style={styles.assetTicker}>{item.ticker}</Text>
-                <Text style={styles.assetQty}>
-                  {Number(item.quantity).toLocaleString('es-AR', { maximumFractionDigits: 8 })} unidades
-                </Text>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.assetTicker}>{item.ticker}</Text>
+                  <Text style={styles.assetMarketValue}>
+                    {item.market_value > 0 ? formatMoney(item.market_value, item.currency || currency) : '—'}
+                  </Text>
+                </View>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.assetQty}>
+                    {formatQty(item.quantity)} × {item.price > 0 ? formatMoney(item.price, item.currency || currency) : '—'}
+                  </Text>
+                </View>
+                {item.name ? (
+                  <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>
+                ) : null}
               </View>
 
               {/* Delete */}
-              {deletingId === item.id ? (
+              {deletingTicker === item.ticker ? (
                 <ActivityIndicator size="small" color="#ff6666" />
               ) : (
                 <TouchableOpacity
@@ -284,7 +411,7 @@ export default function WalletDetailScreen() {
                   <MaterialIcons name="delete-outline" size={20} color="#4a6a80" />
                 </TouchableOpacity>
               )}
-            </View>
+            </TouchableOpacity>
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -300,6 +427,66 @@ export default function WalletDetailScreen() {
       <TouchableOpacity style={styles.fab} onPress={() => setView('addAsset')} activeOpacity={0.8}>
         <MaterialIcons name="add" size={28} color="#fff" />
       </TouchableOpacity>
+
+      {/* Edit quantity modal */}
+      <Modal
+        visible={!!editTicker}
+        transparent
+        animationType="fade"
+        onRequestClose={closeEdit}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Editar cantidad</Text>
+            <Text style={styles.modalTicker}>{editTicker}</Text>
+
+            <Text style={styles.label}>Nueva cantidad</Text>
+            <TextInput
+              style={styles.input}
+              value={editQuantity}
+              onChangeText={setEditQuantity}
+              keyboardType="decimal-pad"
+              autoFocus
+              placeholder="0"
+              placeholderTextColor="#4a6a80"
+            />
+
+            <Text style={styles.hint}>
+              Esta operación reemplaza la cantidad actual (no suma).
+            </Text>
+
+            {editError ? (
+              <View style={styles.errorBox}>
+                <MaterialIcons name="error-outline" size={14} color="#ff6666" />
+                <Text style={styles.errorText}>{editError}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={closeEdit}
+                disabled={editSubmitting}
+              >
+                <Text style={styles.modalBtnGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnPrimary]}
+                onPress={submitEdit}
+                disabled={editSubmitting}
+              >
+                {editSubmitting
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.modalBtnPrimaryText}>Guardar</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -323,6 +510,16 @@ const styles = StyleSheet.create({
   headerTitle:  { color: '#fff', fontSize: 18, fontWeight: '700' },
   headerSub:    { color: '#8aaabf', fontSize: 12, marginTop: 1 },
 
+  // total card (valuación)
+  totalCard: {
+    backgroundColor: '#132238', borderRadius: 16,
+    marginHorizontal: 16, marginTop: 16, padding: 18,
+    borderWidth: 1, borderColor: '#1e3a5a',
+  },
+  totalLabel: { color: '#8aaabf', fontSize: 12, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+  totalValue: { color: '#00ADD8', fontSize: 28, fontWeight: '800', marginTop: 6 },
+  totalSub:   { color: '#4a6a80', fontSize: 12, marginTop: 4 },
+
   // list
   list: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100 },
   assetCard: {
@@ -336,8 +533,11 @@ const styles = StyleSheet.create({
   },
   assetIconText: { color: '#00ADD8', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
   assetBody:     { flex: 1 },
+  rowBetween:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   assetTicker:   { color: '#fff', fontWeight: '700', fontSize: 16 },
-  assetQty:      { color: '#8aaabf', fontSize: 13, marginTop: 3 },
+  assetMarketValue: { color: '#00ADD8', fontWeight: '700', fontSize: 14 },
+  assetQty:      { color: '#8aaabf', fontSize: 12, marginTop: 3 },
+  assetName:     { color: '#4a6a80', fontSize: 11, marginTop: 2 },
   deleteBtn:     { padding: 4 },
 
   // empty
@@ -384,4 +584,27 @@ const styles = StyleSheet.create({
     shadowColor: '#00ADD8', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
   },
+
+  // edit modal
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center', alignItems: 'center', padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#0a1628', borderRadius: 18, padding: 22,
+    borderWidth: 1, borderColor: '#1e3a5a', width: '100%', maxWidth: 420,
+  },
+  modalTitle:  { color: '#fff', fontSize: 18, fontWeight: '700' },
+  modalTicker: { color: '#00ADD8', fontSize: 14, fontWeight: '700', marginTop: 4 },
+  modalActions: {
+    flexDirection: 'row', gap: 10, marginTop: 22,
+  },
+  modalBtn: {
+    flex: 1, padding: 14, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  modalBtnGhost:       { backgroundColor: '#132238', borderWidth: 1, borderColor: '#1e3a5a' },
+  modalBtnGhostText:   { color: '#8aaabf', fontWeight: '600' },
+  modalBtnPrimary:     { backgroundColor: '#00ADD8' },
+  modalBtnPrimaryText: { color: '#fff', fontWeight: '700' },
 });

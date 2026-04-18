@@ -74,7 +74,8 @@ func main() {
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
 	walletRepo := repository.NewPostgresWalletRepository(db)
-	walletUC := usecase.NewWalletsUseCase(walletRepo)
+	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
