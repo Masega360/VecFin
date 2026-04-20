@@ -20,9 +20,12 @@ func NewPostUsecase(postRepo domain.PostRepository, commRepo domain.CommunityRep
 	}
 }
 
-func (p *PostUsecase) Create(communityID, authorID uuid.UUID, title, content, url string) error {
-	if title == "" || content == "" {
-		return errors.New("El post tiene que tener un titulo o contenido")
+func (p *PostUsecase) Create(communityID, authorID uuid.UUID, parentID *uuid.UUID, title, content, url string) error {
+	if parentID == nil && (title == "" || content == "") {
+		return errors.New("El post tiene que tener un titulo y contenido")
+	}
+	if content == "" {
+		return errors.New("El comentario no puede estar vacío")
 	}
 	if len(title) > 32 {
 		return errors.New("El titulo no puede superar los 32 caracteres")
@@ -34,6 +37,7 @@ func (p *PostUsecase) Create(communityID, authorID uuid.UUID, title, content, ur
 	post := domain.Post{
 		ID:           uuid.New(),
 		CommunityID:  communityID,
+		ParentID:     parentID,
 		AuthorID:     authorID,
 		Title:        title,
 		Content:      content,
@@ -64,16 +68,54 @@ func (p *PostUsecase) EditPost(postID, authorID uuid.UUID, title, content, url s
 	return p.postRepo.Update(post)
 }
 
-func (p *PostUsecase) VotePost(postID uuid.UUID, isUpvote bool) error {
+func (p *PostUsecase) VotePost(postID, userID uuid.UUID, isUpvote bool) error {
 	post, err := p.postRepo.FindByID(postID)
 	if err != nil {
 		return err
 	}
 
-	if isUpvote {
-		post.Upvote()
+	existing, err := p.postRepo.FindVote(postID, userID)
+
+	if err != nil {
+		// No tenía voto previo → voto nuevo
+		if isUpvote {
+			post.Upvotes++
+		} else {
+			post.Downvotes++
+		}
+		if err := p.postRepo.UpsertVote(domain.PostVote{PostID: postID, UserID: userID, IsUpvote: isUpvote}); err != nil {
+			return err
+		}
+	} else if existing.IsUpvote == isUpvote {
+		// Toggle: mismo voto → quitar
+		if isUpvote {
+			post.Upvotes--
+		} else {
+			post.Downvotes--
+		}
+		if err := p.postRepo.DeleteVote(postID, userID); err != nil {
+			return err
+		}
 	} else {
-		post.Downvote()
+		// Cambio de voto: up→down o down→up
+		if isUpvote {
+			post.Upvotes++
+			post.Downvotes--
+		} else {
+			post.Downvotes++
+			post.Upvotes--
+		}
+		if err := p.postRepo.UpsertVote(domain.PostVote{PostID: postID, UserID: userID, IsUpvote: isUpvote}); err != nil {
+			return err
+		}
+	}
+
+	// Asegurar que no queden negativos
+	if post.Upvotes < 0 {
+		post.Upvotes = 0
+	}
+	if post.Downvotes < 0 {
+		post.Downvotes = 0
 	}
 
 	return p.postRepo.Update(post)
@@ -103,7 +145,7 @@ func (p *PostUsecase) DeletePost(postID, userID uuid.UUID) error {
 	return p.postRepo.Delete(postID)
 }
 
-func (p *PostUsecase) GetCommunityPosts(communityID, readerID uuid.UUID) ([]domain.Post, error) {
+func (p *PostUsecase) GetCommunityPosts(communityID, readerID uuid.UUID) ([]domain.PostResponse, error) {
 	comm, err := p.commRepo.FindByID(communityID)
 	if err != nil {
 		return nil, err
@@ -117,11 +159,10 @@ func (p *PostUsecase) GetCommunityPosts(communityID, readerID uuid.UUID) ([]doma
 		}
 	}
 
-	// Si es pública, o si es privada pero SI es miembro, puede ver los posts
-	return p.postRepo.FindByCommunityID(communityID)
+	return p.postRepo.FindByCommunityID(communityID, readerID)
 }
 
-func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.Post, error) {
+func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.PostResponse, error) {
 	comm, err := p.commRepo.FindByID(communityID)
 	if err != nil {
 		return nil, err
@@ -134,4 +175,8 @@ func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, qu
 	}
 
 	return p.postRepo.SearchPostsInCommunity(communityID, query)
+}
+
+func (p *PostUsecase) GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error) {
+	return p.postRepo.FindRepliesByPostID(postID, readerID)
 }

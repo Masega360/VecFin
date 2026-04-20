@@ -48,6 +48,53 @@ func (r *PostgresCommunityRepository) FindByID(id uuid.UUID) (domain.Community, 
 	return c, nil
 }
 
+func (r *PostgresCommunityRepository) GetByUserID(userID uuid.UUID) ([]domain.Community, error) {
+	query := `
+        SELECT c.id, c.creator_id, c.name, c.description, c.rules, c.topics, c.logo_url, c.is_private, c.creation_date, c.member_count, c.post_count
+        FROM communities c
+        INNER JOIN community_members cm ON c.id = cm.community_id
+        WHERE cm.user_id = $1
+        ORDER BY cm.joined_at DESC 
+    `
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var communities []domain.Community
+
+	for rows.Next() {
+		var c domain.Community
+
+		err := rows.Scan(
+			&c.ID,
+			&c.CreatorID,
+			&c.Name,
+			&c.Description,
+			&c.Rules,
+			pq.Array(&c.Topics),
+			&c.LogoUrl,
+			&c.IsPrivate,
+			&c.CreationDate,
+			&c.MemberCount,
+			&c.PostCount,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		communities = append(communities, c)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return communities, nil
+}
+
 func (r *PostgresCommunityRepository) Search(searchQuery string) ([]domain.Community, error) {
 	var comms []domain.Community
 	searchTerm := "%" + searchQuery + "%"
@@ -165,4 +212,54 @@ func (r *PostgresCommunityRepository) UpdateJoinRequestStatus(communityID, userI
 	query := `UPDATE community_join_requests SET status = $1 WHERE community_id = $2 AND user_id = $3`
 	_, err := r.db.Exec(query, status, communityID, userID)
 	return err
+}
+
+func (r *PostgresCommunityRepository) GetMembers(communityID uuid.UUID) ([]domain.CommunityMemberResponse, error) {
+	query := `
+        SELECT cm.community_id, cm.user_id, cm.role, cm.joined_at,
+               u.first_name, u.last_name
+        FROM community_members cm
+        INNER JOIN users u ON cm.user_id = u.id
+        WHERE cm.community_id = $1
+        ORDER BY
+            CASE cm.role WHEN 'owner' THEN 1 WHEN 'moderator' THEN 2 ELSE 3 END,
+            cm.joined_at ASC
+    `
+	rows, err := r.db.Query(query, communityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var members []domain.CommunityMemberResponse
+	for rows.Next() {
+		var m domain.CommunityMemberResponse
+		if err := rows.Scan(&m.CommunityID, &m.UserID, &m.Role, &m.JoinedAt, &m.FirstName, &m.LastName); err != nil {
+			return nil, err
+		}
+		members = append(members, m)
+	}
+	return members, nil
+}
+
+func (r *PostgresCommunityRepository) GetPendingJoinRequests(communityID uuid.UUID) ([]domain.JoinRequest, error) {
+	query := `
+        SELECT community_id, user_id, status, created_at
+        FROM community_join_requests
+        WHERE community_id = $1 AND status = 'pending'
+        ORDER BY created_at ASC
+    `
+	rows, err := r.db.Query(query, communityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var reqs []domain.JoinRequest
+	for rows.Next() {
+		var req domain.JoinRequest
+		if err := rows.Scan(&req.CommunityID, &req.UserID, &req.Status, &req.CreatedAt); err != nil {
+			return nil, err
+		}
+		reqs = append(reqs, req)
+	}
+	return reqs, nil
 }

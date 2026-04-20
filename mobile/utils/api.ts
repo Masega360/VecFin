@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
 export const API_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+  Platform.OS === 'android' ? 'http://192.168.0.14:8080' : 'http://localhost:8080';
 
 function isTokenExpired(token: string): boolean {
   try {

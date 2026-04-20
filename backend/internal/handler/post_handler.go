@@ -10,12 +10,13 @@ import (
 )
 
 type PostUsecasePort interface {
-	Create(communityID, authorID uuid.UUID, title, content, url string) error
+	Create(communityID, authorID uuid.UUID, parentID *uuid.UUID, title, content, url string) error
 	EditPost(communityID, authorID uuid.UUID, title, content, url string) error
-	VotePost(postID uuid.UUID, isUpvote bool) error
-	GetCommunityPosts(communityID, readerID uuid.UUID) ([]domain.Post, error)
+	VotePost(postID, userID uuid.UUID, isUpvote bool) error
+	GetCommunityPosts(communityID, readerID uuid.UUID) ([]domain.PostResponse, error)
 	DeletePost(postID, userID uuid.UUID) error
-	SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.Post, error)
+	SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.PostResponse, error)
+	GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error)
 }
 
 func (h *PostHandler) RegisterRoutes(jwtSecret string) {
@@ -29,6 +30,8 @@ func (h *PostHandler) RegisterRoutes(jwtSecret string) {
 	http.HandleFunc("GET /communities/{id}/posts", auth(h.GetCommunityPosts))
 	http.HandleFunc("GET /communities/{id}/posts/search", auth(h.SearchPosts))
 
+	http.HandleFunc("GET /posts/{id}/replies", auth(h.GetReplies))
+
 }
 
 type PostHandler struct {
@@ -40,7 +43,6 @@ func NewPostHandler(uc PostUsecasePort) *PostHandler {
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
-	// 1. Obtener AuthorID del context (JWT)
 	userStr, ok := r.Context().Value(middleware.UserIDKey).(string)
 	if !ok {
 		http.Error(w, "No autorizado", http.StatusUnauthorized)
@@ -48,9 +50,9 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	authorID, _ := uuid.Parse(userStr)
 
-	// 2. Decodificar Body
 	var body struct {
 		CommunityID string `json:"community_id"`
+		ParentID    string `json:"parent_id"` // vacío string = no es reply
 		Title       string `json:"title"`
 		Content     string `json:"content"`
 		URL         string `json:"url"`
@@ -66,8 +68,18 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Llamar al caso de uso
-	if err := h.uc.Create(commID, authorID, body.Title, body.Content, body.URL); err != nil {
+	// Convertir parentID string → *uuid.UUID
+	var parentID *uuid.UUID
+	if body.ParentID != "" {
+		parsed, err := uuid.Parse(body.ParentID)
+		if err != nil {
+			http.Error(w, "parent_id inválido", http.StatusBadRequest)
+			return
+		}
+		parentID = &parsed
+	}
+
+	if err := h.uc.Create(commID, authorID, parentID, body.Title, body.Content, body.URL); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -116,27 +128,30 @@ func (h *PostHandler) Edit(w http.ResponseWriter, r *http.Request) {
 
 // 3. El endpoint para VOTAR un post
 func (h *PostHandler) Vote(w http.ResponseWriter, r *http.Request) {
-	postIDStr := r.PathValue("id")
-	postID, err := uuid.Parse(postIDStr)
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "No autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	postID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		http.Error(w, "ID de post inválido", http.StatusBadRequest)
 		return
 	}
 
 	var body struct {
-		IsUpvote bool `json:"is_upvote"` // true = like, false = dislike
+		IsUpvote bool `json:"is_upvote"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "solicitud inválida", http.StatusBadRequest)
 		return
 	}
 
-	// Mandar al Chef
-	if err := h.uc.VotePost(postID, body.IsUpvote); err != nil {
+	if err := h.uc.VotePost(postID, userID, body.IsUpvote); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -206,6 +221,26 @@ func (h *PostHandler) SearchPosts(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
+}
+
+func (h *PostHandler) GetReplies(w http.ResponseWriter, r *http.Request) {
+	readerID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "No autorizado", http.StatusUnauthorized)
+		return
+	}
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "ID inválido", http.StatusBadRequest)
+		return
+	}
+	replies, err := h.uc.GetReplies(postID, readerID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(replies)
 }
 
 func (h *PostHandler) getUserIDFromContext(r *http.Request) (uuid.UUID, error) {

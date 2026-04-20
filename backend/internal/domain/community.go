@@ -40,6 +40,7 @@ type CommunityRepository interface {
 	// Gestión de la comunidad
 	Create(community Community) error
 	FindByID(id uuid.UUID) (Community, error)
+	GetByUserID(userID uuid.UUID) ([]Community, error)
 	Search(query string) ([]Community, error)
 	Update(community Community) error
 	Delete(id uuid.UUID) error
@@ -54,6 +55,9 @@ type CommunityRepository interface {
 	CreateJoinRequest(req JoinRequest) error
 	GetJoinRequest(communityID, userID uuid.UUID) (JoinRequest, error)
 	UpdateJoinRequestStatus(communityID, userID uuid.UUID, status RequestStatus) error
+
+	GetMembers(communityID uuid.UUID) ([]CommunityMemberResponse, error)
+	GetPendingJoinRequests(communityID uuid.UUID) ([]JoinRequest, error)
 }
 
 // ValidateLeave verifica si el usuario puede irse de la comunidad
@@ -137,4 +141,10 @@ type JoinRequest struct {
 
 func (cm *CommunityMember) CanManageJoinRequests() bool {
 	return cm.Role == RoleOwner || cm.Role == RoleModerator
+}
+
+type CommunityMemberResponse struct {
+	CommunityMember
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }

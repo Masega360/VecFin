@@ -8,10 +8,11 @@ import { useRouter } from 'expo-router';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { MaterialIcons } from '@expo/vector-icons';
+import { API_URL, getValidToken } from '@/utils/api';
+
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 const GOOGLE_CLIENT_ID = '1041823470474-j3l8qlq348e8c3ceoql92d3um9sfl38s.apps.googleusercontent.com';
 
 export default function LoginScreen() {

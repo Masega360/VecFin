@@ -24,3 +24,14 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE INDEX IF NOT EXISTS idx_posts_community_id ON posts(community_id);
 CREATE INDEX IF NOT EXISTS idx_posts_author_id ON posts(author_id);
+
+CREATE TABLE IF NOT EXISTS post_votes (
+    post_id   UUID NOT NULL,
+    user_id   UUID NOT NULL,
+    is_upvote BOOLEAN NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+
+    PRIMARY KEY (post_id, user_id),
+    CONSTRAINT fk_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );

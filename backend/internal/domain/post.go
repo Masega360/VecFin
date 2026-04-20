@@ -28,11 +28,15 @@ type Post struct {
 type PostRepository interface {
 	Create(post Post) error
 	FindByID(id uuid.UUID) (Post, error)
-	FindByCommunityID(communityID uuid.UUID) ([]Post, error)
-	FindRepliesByPostID(parentID uuid.UUID) ([]Post, error)
-	SearchPostsInCommunity(communityID uuid.UUID, query string) ([]Post, error)
+	FindByCommunityID(communityID, readerID uuid.UUID) ([]PostResponse, error)
+	FindRepliesByPostID(parentID, readerID uuid.UUID) ([]PostResponse, error)
+	SearchPostsInCommunity(communityID uuid.UUID, query string) ([]PostResponse, error)
 	Update(post Post) error
 	Delete(id uuid.UUID) error
+
+	FindVote(postID, userID uuid.UUID) (PostVote, error)
+	UpsertVote(vote PostVote) error
+	DeleteVote(postID, userID uuid.UUID) error
 }
 
 func (p *Post) Edit(title, content, url string) error {
@@ -55,4 +59,16 @@ func (p *Post) Downvote() {
 
 func (p *Post) IncrementCommentCount() {
 	p.CommentCount++
+}
+
+type PostResponse struct {
+	Post
+	AuthorName string `json:"author_name"`
+	UserVote   *bool  `json:"user_vote"` // nil = sin voto, true = upvote, false = downvote
+}
+
+type PostVote struct {
+	PostID   uuid.UUID
+	UserID   uuid.UUID
+	IsUpvote bool
 }

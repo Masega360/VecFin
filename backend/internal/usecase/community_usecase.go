@@ -98,6 +98,30 @@ func (u *CommunityUsecase) JoinCommunity(communityID, userID uuid.UUID) error {
 	}
 }
 
+func (u *CommunityUsecase) LeaveCommunity(communityID, userID uuid.UUID) error {
+	member, err := u.repo.FindMember(communityID, userID)
+	if err != nil {
+		return errors.New("no eres miembro de esta comunidad")
+	}
+
+	// Si es el dueño, validamos que no deje la comunidad huérfana
+	if member.Role == domain.RoleOwner {
+		ownersCount, _ := u.repo.CountOwners(communityID)
+		if err := member.ValidateLeave(ownersCount <= 1); err != nil {
+			return err
+		}
+	}
+
+	if err := u.repo.RemoveMember(communityID, userID); err != nil {
+		return err
+	}
+
+	// Actualizamos el contador
+	comm, _ := u.repo.FindByID(communityID)
+	comm.MemberCount--
+	return u.repo.Update(comm)
+}
+
 func (u *CommunityUsecase) ResolveJoinRequest(communityID, moderatorID, applicantID uuid.UUID, approve bool) error {
 	// Verificar permisos del moderador
 	mod, err := u.repo.FindMember(communityID, moderatorID)
@@ -198,6 +222,10 @@ func (u *CommunityUsecase) PromoteToOwner(communityID, currentOwnerID, newOwnerI
 	return u.repo.UpdateMember(newOwner)
 }
 
+func (u *CommunityUsecase) GetUserCommunities(userID uuid.UUID) ([]domain.Community, error) {
+	return u.repo.GetByUserID(userID)
+}
+
 // VER PERFIL DE COMUNIDAD
 func (u *CommunityUsecase) GetCommunity(communityID uuid.UUID) (domain.Community, error) {
 	return u.repo.FindByID(communityID)
@@ -224,4 +252,79 @@ func (u *CommunityUsecase) DeleteCommunity(communityID, userID uuid.UUID) error 
 	}
 
 	return u.repo.Delete(communityID)
+}
+
+func (u *CommunityUsecase) UpdateCommunity(communityID, userID uuid.UUID, name, desc, rules, logo string) error {
+	member, err := u.repo.FindMember(communityID, userID)
+	if err != nil {
+		return errors.New("no eres miembro de esta comunidad")
+	}
+
+	// Solo dueños o moderadores pueden editar
+	if member.Role != domain.RoleOwner && member.Role != domain.RoleModerator {
+		return errors.New("no tienes permisos para editar la comunidad")
+	}
+
+	comm, err := u.repo.FindByID(communityID)
+	if err != nil {
+		return err
+	}
+
+	// Actualizamos solo lo que nos envíen
+	if name != "" {
+		comm.Name = name
+	}
+	if desc != "" {
+		comm.Description = desc
+	}
+	if rules != "" {
+		comm.Rules = rules
+	}
+	if logo != "" {
+		comm.LogoUrl = logo
+	}
+
+	return u.repo.Update(comm)
+}
+
+func (u *CommunityUsecase) GetMemberRole(communityID, userID uuid.UUID) (string, error) {
+	member, err := u.repo.FindMember(communityID, userID)
+	if err != nil {
+		return "", errors.New("no eres miembro")
+	}
+	return string(member.Role), nil
+}
+
+func (u *CommunityUsecase) GetMembers(communityID, requesterID uuid.UUID) ([]domain.CommunityMemberResponse, error) {
+	if _, err := u.repo.FindMember(communityID, requesterID); err != nil {
+		return nil, errors.New("no eres miembro de esta comunidad")
+	}
+	return u.repo.GetMembers(communityID)
+}
+
+func (u *CommunityUsecase) GetPendingRequests(communityID, moderatorID uuid.UUID) ([]domain.JoinRequest, error) {
+	mod, err := u.repo.FindMember(communityID, moderatorID)
+	if err != nil || !mod.CanManageJoinRequests() {
+		return nil, errors.New("no tenés permisos")
+	}
+	return u.repo.GetPendingJoinRequests(communityID)
+}
+
+func (u *CommunityUsecase) DemoteModerator(communityID, ownerID, targetID uuid.UUID) error {
+	owner, err := u.repo.FindMember(communityID, ownerID)
+	if err != nil {
+		return errors.New("no eres miembro de esta comunidad")
+	}
+	if owner.Role != domain.RoleOwner {
+		return errors.New("solo el líder puede quitar moderadores")
+	}
+	target, err := u.repo.FindMember(communityID, targetID)
+	if err != nil {
+		return errors.New("el usuario no es miembro de esta comunidad")
+	}
+	if target.Role != domain.RoleModerator {
+		return errors.New("el usuario no es moderador")
+	}
+	target.Role = domain.RoleMember
+	return u.repo.UpdateMember(target)
 }

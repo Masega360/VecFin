@@ -25,7 +25,9 @@ import (
 
 func main() {
 	// En Docker las vars vienen del compose; godotenv solo aplica en desarrollo local
-	godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		log.Println("Aviso: no se encontró .env, usando variables de entorno del sistema")
+	}
 
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
@@ -71,6 +73,17 @@ func main() {
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
+	walletRepo := repository.NewPostgresWalletRepository(db)
+	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient)
+	walletHandler := handler.NewWalletHandler(walletUC)
+	walletHandler.RegisterRoutes(cfg.JWTSecret)
+
+	platformRepo := repository.NewPostgresPlatformRepository(db)
+	platformUC := usecase.NewPlatformUsecase(platformRepo)
+	platformHandler := handler.NewPlatformHandler(platformUC)
+	platformHandler.RegisterRoutes(cfg.JWTSecret)
+
 	commRepo := repository.NewPostgresCommunityRepository(db)
 	commUC := usecase.NewCommunityUsecase(commRepo)
 	commHandler := handler.NewCommunityHandler(commUC)
@@ -83,7 +96,9 @@ func main() {
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+			log.Println("Error escribiendo respuesta de health:", err)
+		}
 	})
 
 	c := cors.New(cors.Options{

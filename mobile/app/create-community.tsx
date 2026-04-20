@@ -1,50 +1,233 @@
 import React, { useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
-    SafeAreaView, ActivityIndicator, Switch, ScrollView,
-    KeyboardAvoidingView, Platform
+    SafeAreaView, ActivityIndicator, ScrollView,
+    KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
 
+// ─── Limits (espejados del domain Go) ────────────────────────────────────────
+const NAME_MAX = 64;
+const DESC_MAX = 512;
+const RULES_MAX = 512;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function charCounter(value: string, max: number) {
+    const left = max - value.length;
+    const isNear = left <= max * 0.15; // últimos 15%
+    return { left, isNear };
+}
+
+// ─── Field Component ──────────────────────────────────────────────────────────
+
+function Field({
+                   label,
+                   required,
+                   hint,
+                   value,
+                   onChangeText,
+                   placeholder,
+                   multiline,
+                   max,
+                   keyboardType,
+                   autoCapitalize,
+                   error,
+               }: {
+    label: string;
+    required?: boolean;
+    hint?: string;
+    value: string;
+    onChangeText: (t: string) => void;
+    placeholder: string;
+    multiline?: boolean;
+    max?: number;
+    keyboardType?: any;
+    autoCapitalize?: any;
+    error?: string;
+}) {
+    const counter = max ? charCounter(value, max) : null;
+
+    return (
+        <View style={f.group}>
+            <View style={f.labelRow}>
+                <Text style={f.label}>
+                    {label}
+                    {required && <Text style={f.required}> *</Text>}
+                </Text>
+                {counter && (
+                    <Text style={[f.counter, counter.isNear && f.counterNear]}>
+                        {counter.left}
+                    </Text>
+                )}
+            </View>
+            {hint && <Text style={f.hint}>{hint}</Text>}
+            <TextInput
+                style={[
+                    f.input,
+                    multiline && f.textarea,
+                    !!error && f.inputError,
+                ]}
+                placeholder={placeholder}
+                placeholderTextColor="#3d5a70"
+                value={value}
+                onChangeText={onChangeText}
+                multiline={multiline}
+                numberOfLines={multiline ? 4 : 1}
+                textAlignVertical={multiline ? 'top' : 'center'}
+                maxLength={max}
+                keyboardType={keyboardType}
+                autoCapitalize={autoCapitalize ?? 'sentences'}
+            />
+            {error ? (
+                <View style={f.errorRow}>
+                    <MaterialIcons name="error-outline" size={13} color="#e05c5c" />
+                    <Text style={f.errorText}>{error}</Text>
+                </View>
+            ) : null}
+        </View>
+    );
+}
+
+// ─── Toggle Switch ────────────────────────────────────────────────────────────
+
+function ToggleRow({
+                       label,
+                       sub,
+                       value,
+                       onChange,
+                   }: {
+    label: string;
+    sub: string;
+    value: boolean;
+    onChange: (v: boolean) => void;
+}) {
+    return (
+        <TouchableOpacity style={t.row} onPress={() => onChange(!value)} activeOpacity={0.8}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+                <Text style={t.label}>{label}</Text>
+                <Text style={t.sub}>{sub}</Text>
+            </View>
+            <View style={[t.track, value && t.trackOn]}>
+                <View style={[t.knob, value && t.knobOn]} />
+            </View>
+        </TouchableOpacity>
+    );
+}
+
+// ─── Topic Input ──────────────────────────────────────────────────────────────
+
+function TopicsInput({
+                         topics,
+                         onChange,
+                     }: {
+    topics: string[];
+    onChange: (ts: string[]) => void;
+}) {
+    const [input, setInput] = useState('');
+
+    const add = () => {
+        const trimmed = input.trim().toLowerCase().replace(/\s+/g, '-');
+        if (!trimmed || topics.includes(trimmed) || topics.length >= 5) return;
+        onChange([...topics, trimmed]);
+        setInput('');
+    };
+
+    const remove = (topic: string) => onChange(topics.filter(t => t !== topic));
+
+    return (
+        <View style={tp.group}>
+            <View style={tp.labelRow}>
+                <Text style={tp.label}>Temas</Text>
+                <Text style={tp.counter}>{topics.length}/5</Text>
+            </View>
+            <Text style={tp.hint}>Etiquetas para que otros encuentren tu comunidad</Text>
+
+            <View style={tp.inputRow}>
+                <TextInput
+                    style={tp.input}
+                    placeholder="crypto, acciones, noticias..."
+                    placeholderTextColor="#3d5a70"
+                    value={input}
+                    onChangeText={setInput}
+                    onSubmitEditing={add}
+                    returnKeyType="done"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={topics.length < 5}
+                />
+                <TouchableOpacity
+                    style={[tp.addBtn, (!input.trim() || topics.length >= 5) && tp.addBtnDisabled]}
+                    onPress={add}
+                    disabled={!input.trim() || topics.length >= 5}
+                >
+                    <MaterialIcons name="add" size={20} color="#fff" />
+                </TouchableOpacity>
+            </View>
+
+            {topics.length > 0 && (
+                <View style={tp.pills}>
+                    {topics.map(topic => (
+                        <TouchableOpacity
+                            key={topic}
+                            style={tp.pill}
+                            onPress={() => remove(topic)}
+                        >
+                            <Text style={tp.pillText}>#{topic}</Text>
+                            <MaterialIcons name="close" size={13} color="#7a9ab0" />
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function CreateCommunityScreen() {
     const router = useRouter();
 
-    // Estados del formulario
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [rules, setRules] = useState('');
+    const [topics, setTopics] = useState<string[]>([]);
     const [logoUrl, setLogoUrl] = useState('');
     const [isPrivate, setIsPrivate] = useState(false);
 
-    // Estados de la UI
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+
+    // Validaciones espejadas del usecase Go
+    const validate = (): boolean => {
+        const errs: Record<string, string> = {};
+
+        if (!name.trim()) errs.name = 'El nombre es obligatorio';
+        else if (name.length >= NAME_MAX) errs.name = `Máximo ${NAME_MAX - 1} caracteres`;
+
+        if (!description.trim()) errs.description = 'La descripción es obligatoria';
+        else if (description.length >= DESC_MAX) errs.description = `Máximo ${DESC_MAX - 1} caracteres`;
+
+        if (!rules.trim()) errs.rules = 'Las reglas son obligatorias';
+        else if (rules.length >= RULES_MAX) errs.rules = `Máximo ${RULES_MAX - 1} caracteres`;
+
+        setErrors(errs);
+        return Object.keys(errs).length === 0;
+    };
 
     const handleCreate = async () => {
-        // 1. Validaciones básicas
-        if (!name.trim()) {
-            setError('El nombre de la comunidad es obligatorio.');
-            return;
-        }
-        if (!description.trim()) {
-            setError('Añade una breve descripción para tu comunidad.');
-            return;
-        }
+        if (!validate()) return;
 
-        setError('');
         setLoading(true);
-
         try {
             const token = await getValidToken();
             if (!token) {
-                setError('No estás autenticado.');
-                setLoading(false);
+                Alert.alert('Error', 'No estás autenticado.');
                 return;
             }
 
-            // 2. Enviar petición al backend
             const res = await fetch(`${API_URL}/communities`, {
                 method: 'POST',
                 headers: {
@@ -55,153 +238,247 @@ export default function CreateCommunityScreen() {
                     name: name.trim(),
                     description: description.trim(),
                     rules: rules.trim(),
+                    topics,
                     logo_url: logoUrl.trim(),
                     is_private: isPrivate,
                 }),
             });
 
             if (res.ok) {
-                // ¡Éxito! Volvemos a la pantalla anterior
                 router.back();
             } else {
                 const errorText = await res.text();
-                setError(`Error al crear: ${errorText}`);
+                Alert.alert('Error', errorText || 'No se pudo crear la comunidad.');
             }
-        } catch (err) {
-            setError('Sin conexión al servidor.');
+        } catch {
+            Alert.alert('Error', 'Sin conexión al servidor.');
         } finally {
             setLoading(false);
         }
     };
 
-    return (
-        <SafeAreaView style={styles.root}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <MaterialIcons name="arrow-back" size={24} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Nueva Comunidad</Text>
-                <View style={{ width: 24 }} />
-            </View>
+    const clearError = (field: string) =>
+        setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
 
+    return (
+        <SafeAreaView style={s.root}>
+            {/* Header */}
+            <View style={s.header}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <MaterialIcons name="close" size={24} color="#e8f4f8" />
+                </TouchableOpacity>
+                <Text style={s.headerTitle}>Nueva Comunidad</Text>
+                <TouchableOpacity
+                    style={[s.headerBtn, loading && { opacity: 0.5 }]}
+                    onPress={handleCreate}
+                    disabled={loading}
+                >
+                    {loading
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <Text style={s.headerBtnText}>Crear</Text>
+                    }
+                </TouchableOpacity>
+            </View>
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-
-                    <Text style={styles.infoText}>
-                        Crea un espacio para debatir y compartir sobre tus temas financieros favoritos.
+                <ScrollView
+                    contentContainerStyle={s.content}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Text style={s.intro}>
+                        Creá un espacio para debatir y compartir sobre tus temas financieros favoritos.
                     </Text>
 
-                    {/* Nombre */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Nombre de la Comunidad <Text style={styles.required}>*</Text></Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Ej: Inversores Argentina"
-                            placeholderTextColor="#4a6a80"
-                            value={name}
-                            onChangeText={setName}
-                            maxLength={64}
+                    <Field
+                        label="Nombre"
+                        required
+                        placeholder="Ej: Inversores Argentina"
+                        value={name}
+                        onChangeText={t => { setName(t); clearError('name'); }}
+                        max={NAME_MAX}
+                        error={errors.name}
+                    />
+
+                    <Field
+                        label="Descripción"
+                        required
+                        hint="Contá de qué trata tu comunidad"
+                        placeholder="Una comunidad para debatir..."
+                        value={description}
+                        onChangeText={t => { setDescription(t); clearError('description'); }}
+                        multiline
+                        max={DESC_MAX}
+                        error={errors.description}
+                    />
+
+                    <Field
+                        label="Reglas"
+                        required
+                        hint="Definí las normas de convivencia"
+                        placeholder="1. Respeto ante todo&#10;2. No spam&#10;3. Contenido relevante"
+                        value={rules}
+                        onChangeText={t => { setRules(t); clearError('rules'); }}
+                        multiline
+                        max={RULES_MAX}
+                        error={errors.rules}
+                    />
+
+                    <TopicsInput topics={topics} onChange={setTopics} />
+
+                    <Field
+                        label="URL del logo"
+                        hint="Opcional · Link directo a una imagen"
+                        placeholder="https://ejemplo.com/logo.png"
+                        value={logoUrl}
+                        onChangeText={setLogoUrl}
+                        keyboardType="url"
+                        autoCapitalize="none"
+                    />
+
+                    <View style={s.section}>
+                        <ToggleRow
+                            label="Comunidad privada"
+                            sub={
+                                isPrivate
+                                    ? 'Los nuevos miembros necesitan aprobación'
+                                    : 'Cualquiera puede unirse libremente'
+                            }
+                            value={isPrivate}
+                            onChange={setIsPrivate}
                         />
                     </View>
 
-                    {/* Descripción */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Descripción <Text style={styles.required}>*</Text></Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            placeholder="¿De qué trata esta comunidad?"
-                            placeholderTextColor="#4a6a80"
-                            value={description}
-                            onChangeText={setDescription}
-                            multiline
-                            numberOfLines={3}
-                            textAlignVertical="top"
-                        />
-                    </View>
-
-                    {/* Reglas */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Reglas (Opcional)</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            placeholder="1. Respeto ante todo..."
-                            placeholderTextColor="#4a6a80"
-                            value={rules}
-                            onChangeText={setRules}
-                            multiline
-                            numberOfLines={3}
-                            textAlignVertical="top"
-                        />
-                    </View>
-
-                    {/* Logo URL */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>URL del Logo (Opcional)</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="https://ejemplo.com/logo.png"
-                            placeholderTextColor="#4a6a80"
-                            value={logoUrl}
-                            onChangeText={setLogoUrl}
-                            keyboardType="url"
-                            autoCapitalize="none"
-                        />
-                    </View>
-
-                    {/* Switch de Privacidad */}
-                    <View style={styles.switchGroup}>
-                        <View style={styles.switchTextContainer}>
-                            <Text style={styles.labelSwitch}>Comunidad Privada</Text>
-                            <Text style={styles.subLabelSwitch}>
-                                {isPrivate
-                                    ? "Solo los miembros aprobados podrán ver y crear posts."
-                                    : "Cualquiera podrá ver los posts y unirse libremente."}
+                    {isPrivate && (
+                        <View style={s.infoBox}>
+                            <MaterialIcons name="info-outline" size={16} color="#00b4d8" />
+                            <Text style={s.infoText}>
+                                Como líder podrás aprobar o rechazar cada solicitud de ingreso desde la sección de Gestión.
                             </Text>
                         </View>
-                        <Switch
-                            trackColor={{ false: '#132238', true: '#00ADD8' }}
-                            thumbColor={'#fff'}
-                            ios_backgroundColor="#132238"
-                            onValueChange={setIsPrivate}
-                            value={isPrivate}
-                        />
-                    </View>
+                    )}
 
-                    {/* Mensaje de Error */}
-                    {error ? (
-                        <View style={styles.errorBox}>
-                            <MaterialIcons name="error-outline" size={16} color="#ff6666" />
-                            <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    ) : null}
-
-                    {/* Botón de Submit */}
-                    <TouchableOpacity
-                        style={styles.createBtn}
-                        onPress={handleCreate}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                            <Text style={styles.createBtnText}>Crear Comunidad</Text>
-                        )}
-                    </TouchableOpacity>
-
+                    {/* Bottom spacer para que el scroll no quede cortado */}
+                    <View style={{ height: 20 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
+// ─── Field Styles ─────────────────────────────────────────────────────────────
+
+const f = StyleSheet.create({
+    group: { gap: 6 },
+    labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    label: { color: '#7a9ab0', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+    required: { color: '#e05c5c' },
+    hint: { color: '#3d5a70', fontSize: 12, marginTop: -2 },
+    counter: { color: '#3d5a70', fontSize: 12 },
+    counterNear: { color: '#f5a623' },
+    input: {
+        backgroundColor: '#111e2e',
+        borderWidth: 1,
+        borderColor: '#1a2d42',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        color: '#e8f4f8',
+        fontSize: 15,
+    },
+    textarea: { minHeight: 100, paddingTop: 13 },
+    inputError: { borderColor: '#e05c5c' },
+    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    errorText: { color: '#e05c5c', fontSize: 12 },
+});
+
+// ─── Toggle Styles ────────────────────────────────────────────────────────────
+
+const t = StyleSheet.create({
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#111e2e',
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1a2d42',
+    },
+    label: { color: '#e8f4f8', fontSize: 15, fontWeight: '600', marginBottom: 3 },
+    sub: { color: '#7a9ab0', fontSize: 12, lineHeight: 16 },
+    track: {
+        width: 48,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#1a2d42',
+        padding: 3,
+        justifyContent: 'center',
+    },
+    trackOn: { backgroundColor: '#00b4d8' },
+    knob: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#3d5a70',
+    },
+    knobOn: { backgroundColor: '#fff', marginLeft: 20 },
+});
+
+// ─── Topics Styles ────────────────────────────────────────────────────────────
+
+const tp = StyleSheet.create({
+    group: { gap: 6 },
+    labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    label: { color: '#7a9ab0', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+    counter: { color: '#3d5a70', fontSize: 12 },
+    hint: { color: '#3d5a70', fontSize: 12, marginTop: -2 },
+    inputRow: { flexDirection: 'row', gap: 8 },
+    input: {
+        flex: 1,
+        backgroundColor: '#111e2e',
+        borderWidth: 1,
+        borderColor: '#1a2d42',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        color: '#e8f4f8',
+        fontSize: 15,
+    },
+    addBtn: {
+        backgroundColor: '#00b4d8',
+        width: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addBtnDisabled: { backgroundColor: '#1a2d42' },
+    pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+    pill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#0a2030',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#1a2d42',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    pillText: { color: '#7a9ab0', fontSize: 13, fontWeight: '500' },
+});
+
+// ─── Screen Styles ────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
     root: {
         flex: 1,
-        backgroundColor: '#0a1628',
+        backgroundColor: '#080f1a',
         paddingTop: Platform.OS === 'android' ? 32 : 0,
     },
     header: {
@@ -211,107 +488,34 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#132238',
+        borderBottomColor: '#1a2d42',
+        backgroundColor: '#0d1826',
     },
-    backBtn: {
-        padding: 4,
-    },
-    headerTitle: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    scrollContent: {
-        padding: 20,
-        paddingBottom: 40,
-    },
-    infoText: {
-        color: '#8aaabf',
-        fontSize: 14,
-        marginBottom: 24,
-        lineHeight: 20,
-    },
-    inputGroup: {
-        marginBottom: 20,
-    },
-    label: {
-        color: '#8aaabf',
-        fontSize: 13,
-        fontWeight: '600',
-        marginBottom: 8,
-        textTransform: 'uppercase',
-    },
-    required: {
-        color: '#ff6666',
-    },
-    input: {
-        backgroundColor: '#132238',
-        borderWidth: 1,
-        borderColor: '#1e3a5a',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        color: '#fff',
-        fontSize: 15,
-    },
-    textArea: {
-        minHeight: 100,
-        paddingTop: 14, // Para que el texto no se pegue arriba en multiline
-    },
-    switchGroup: {
-        flexDirection: 'row',
+    headerTitle: { color: '#e8f4f8', fontSize: 17, fontWeight: '700' },
+    headerBtn: {
+        backgroundColor: '#00b4d8',
+        paddingHorizontal: 18,
+        paddingVertical: 8,
+        borderRadius: 10,
+        minWidth: 64,
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#132238',
-        padding: 16,
+    },
+    headerBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+    content: { padding: 20, gap: 20 },
+    intro: { color: '#7a9ab0', fontSize: 14, lineHeight: 21 },
+
+    section: { gap: 0 },
+
+    infoBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        backgroundColor: 'rgba(0,180,216,0.08)',
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1e3a5a',
-        marginBottom: 24,
+        borderColor: 'rgba(0,180,216,0.2)',
+        padding: 14,
     },
-    switchTextContainer: {
-        flex: 1,
-        paddingRight: 16,
-    },
-    labelSwitch: {
-        color: '#fff',
-        fontSize: 15,
-        fontWeight: '700',
-        marginBottom: 4,
-    },
-    subLabelSwitch: {
-        color: '#8aaabf',
-        fontSize: 12,
-        lineHeight: 16,
-    },
-    errorBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 102, 102, 0.1)',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 20,
-        gap: 8,
-    },
-    errorText: {
-        color: '#ff6666',
-        fontSize: 13,
-        flex: 1,
-    },
-    createBtn: {
-        backgroundColor: '#00ADD8',
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#00ADD8',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    createBtnText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '700',
-    },
+    infoText: { flex: 1, color: '#7a9ab0', fontSize: 13, lineHeight: 19 },
 });

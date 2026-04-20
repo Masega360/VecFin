@@ -25,6 +25,12 @@ type TabConfig = {
 
 const TABS: TabConfig[] = [
   {
+    id: 'profile',
+    label: 'Perfil',
+    icon: 'person',
+    component: ProfileTab,
+  },
+  {
     id: 'assets',
     label: 'Assets',
     icon: 'trending-up',
@@ -41,12 +47,6 @@ const TABS: TabConfig[] = [
     label: 'Comunidad',
     icon: 'people',
     component: CommunityTab, 
-  },
-  {
-    id: 'profile',
-    label: 'Perfil',
-    icon: 'person',
-    component: ProfileTab,
   },
 ];
 
