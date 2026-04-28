@@ -49,7 +49,6 @@ async function authFetch(url: string, opts: RequestInit = {}) {
     });
 }
 
-// Extrae el userID del JWT guardado localmente
 async function getMyUserID(): Promise<string> {
     try {
         const token = await getValidToken();
@@ -133,6 +132,179 @@ function useConfirm() {
     return { state, show, hide };
 }
 
+// ─── Edit Post Modal ──────────────────────────────────────────────────────────
+
+function EditPostModal({ visible, post, onClose, onSaved }: {
+    visible: boolean;
+    post: Post | null;
+    onClose: () => void;
+    onSaved: (id: string, newTitle: string, newContent: string) => void;
+}) {
+    const [title, setTitle] = useState('');
+    const [content, setContent] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const titleLeft = POST_TITLE_MAX - title.length;
+    const contentLeft = POST_CONTENT_MAX - content.length;
+
+    React.useEffect(() => {
+        if (visible && post) { setTitle(post.title ?? ''); setContent(post.content ?? ''); setErrors({}); }
+    }, [visible, post?.id]);
+
+    const save = async () => {
+        if (!post) return;
+        const e: Record<string, string> = {};
+        if (!content.trim()) e.content = 'El contenido no puede estar vacío';
+        if (Object.keys(e).length) { setErrors(e); return; }
+        setLoading(true); setErrors({});
+        try {
+            const res = await authFetch(`${API_URL}/posts/${post.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: title.trim(), content: content.trim(), url: post.url ?? '' }),
+            });
+            if (res.ok) { onSaved(post.id, title.trim(), content.trim()); onClose(); }
+            else setErrors({ _global: await res.text() || 'Error al guardar' });
+        } catch { setErrors({ _global: 'Sin conexión' }); }
+        finally { setLoading(false); }
+    };
+
+    if (!post) return null;
+
+    return (
+        <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+            <Pressable style={ec.overlay} onPress={onClose}>
+                <Pressable style={ec.box} onPress={() => {}}>
+                    <Text style={ec.title}>Editar post</Text>
+                    {!!post.title && (
+                        <View>
+                            <View style={ec.labelRow}>
+                                <Text style={ec.label}>Título</Text>
+                                <Text style={[ec.charCount, titleLeft < 8 && { color: '#f5a623' }]}>{titleLeft}</Text>
+                            </View>
+                            <TextInput
+                                style={ec.input}
+                                value={title}
+                                onChangeText={t => { setTitle(t); setErrors({}); }}
+                                maxLength={POST_TITLE_MAX}
+                                placeholderTextColor="#3d5a70"
+                                placeholder="Título del post"
+                            />
+                        </View>
+                    )}
+                    <View>
+                        <View style={ec.labelRow}>
+                            <Text style={ec.label}>Contenido <Text style={{ color: '#e05c5c' }}>*</Text></Text>
+                            <Text style={[ec.charCount, contentLeft < 100 && { color: '#f5a623' }]}>{contentLeft}</Text>
+                        </View>
+                        <View style={{ position: 'relative' }}>
+                            <TextInput
+                                style={[ec.input, { minHeight: 90, paddingBottom: 24 }]}
+                                value={content}
+                                onChangeText={t => { setContent(t); setErrors({}); }}
+                                multiline
+                                maxLength={POST_CONTENT_MAX}
+                                placeholderTextColor="#3d5a70"
+                                placeholder="Contenido del post"
+                                autoFocus={!post.title}
+                            />
+                        </View>
+                    </View>
+                    {errors.content ? <View style={ec.errorRow}><MaterialIcons name="error-outline" size={13} color="#e05c5c" /><Text style={ec.errorText}>{errors.content}</Text></View> : null}
+                    {errors._global ? <View style={ec.errorRow}><MaterialIcons name="error-outline" size={13} color="#e05c5c" /><Text style={ec.errorText}>{errors._global}</Text></View> : null}
+                    <View style={ec.btnRow}>
+                        <TouchableOpacity style={ec.cancelBtn} onPress={onClose}><Text style={ec.cancelText}>Cancelar</Text></TouchableOpacity>
+                        <TouchableOpacity style={[ec.saveBtn, loading && { opacity: 0.6 }]} onPress={save} disabled={loading}>
+                            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ec.saveText}>Guardar</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+}
+
+// ─── Edit Comment Modal ───────────────────────────────────────────────────────
+
+function EditCommentModal({ visible, comment, onClose, onSaved }: {
+    visible: boolean;
+    comment: Reply | null;
+    onClose: () => void;
+    onSaved: (id: string, newContent: string) => void;
+}) {
+    const [content, setContent] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const charLeft = POST_CONTENT_MAX - content.length;
+
+    React.useEffect(() => {
+        if (visible && comment) { setContent(comment.content); setError(''); }
+    }, [visible, comment?.id]);
+
+    const save = async () => {
+        if (!comment) return;
+        const text = content.trim();
+        if (!text) { setError('El contenido no puede estar vacío'); return; }
+        setLoading(true); setError('');
+        try {
+            const res = await authFetch(`${API_URL}/posts/${comment.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: '', content: text, url: comment.url ?? '' }),
+            });
+            if (res.ok) { onSaved(comment.id, text); onClose(); }
+            else setError(await res.text() || 'Error al guardar');
+        } catch { setError('Sin conexión'); }
+        finally { setLoading(false); }
+    };
+
+    if (!comment) return null;
+
+    return (
+        <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+            <Pressable style={ec.overlay} onPress={onClose}>
+                <Pressable style={ec.box} onPress={() => {}}>
+                    <Text style={ec.title}>Editar comentario</Text>
+                    <View style={{ position: 'relative' }}>
+                        <TextInput
+                            style={[ec.input, { paddingBottom: 24 }]}
+                            value={content}
+                            onChangeText={t => { setContent(t); setError(''); }}
+                            multiline
+                            maxLength={POST_CONTENT_MAX}
+                            placeholderTextColor="#3d5a70"
+                            placeholder="Contenido del comentario"
+                            autoFocus
+                        />
+                        <Text style={[ec.charCount, charLeft < 100 && { color: '#f5a623' }, { position: 'absolute', bottom: 6, right: 10 }]}>{charLeft}</Text>
+                    </View>
+                    {error ? <View style={ec.errorRow}><MaterialIcons name="error-outline" size={13} color="#e05c5c" /><Text style={ec.errorText}>{error}</Text></View> : null}
+                    <View style={ec.btnRow}>
+                        <TouchableOpacity style={ec.cancelBtn} onPress={onClose}><Text style={ec.cancelText}>Cancelar</Text></TouchableOpacity>
+                        <TouchableOpacity style={[ec.saveBtn, loading && { opacity: 0.6 }]} onPress={save} disabled={loading}>
+                            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ec.saveText}>Guardar</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+}
+const ec = StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    box: { backgroundColor: '#0d1826', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360, borderWidth: 1, borderColor: '#1a2d42', gap: 12 },
+    title: { color: '#e8f4f8', fontWeight: '700', fontSize: 16 },
+    labelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+    label: { color: '#3d5a70', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+    input: { backgroundColor: '#111e2e', borderRadius: 12, borderWidth: 1, borderColor: '#1a2d42', paddingHorizontal: 14, paddingVertical: 10, color: '#e8f4f8', fontSize: 14, minHeight: 44, maxHeight: 160 },
+    charCount: { color: '#3d5a70', fontSize: 10 },
+    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    errorText: { color: '#e05c5c', fontSize: 12, flex: 1 },
+    btnRow: { flexDirection: 'row', gap: 10 },
+    cancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#111e2e', borderWidth: 1, borderColor: '#1a2d42', alignItems: 'center' },
+    cancelText: { color: '#7a9ab0', fontWeight: '600', fontSize: 14 },
+    saveBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#00b4d8', alignItems: 'center' },
+    saveText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+});
+
 // ─── Small UI ─────────────────────────────────────────────────────────────────
 
 function TopicPill({ topic }: { topic: string }) {
@@ -188,87 +360,41 @@ function MembersModal({ visible, communityID, myRole, myUserID, onClose }: {
         finally { setActionLoading(null); }
     };
 
-    const doKick = (m: Member) => showDlg({
-        title: 'Expulsar miembro',
-        message: `¿Expulsar a ${m.first_name} ${m.last_name}?`,
-        confirmLabel: 'Expulsar', danger: true, onCancel: hideDlg,
-        onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/kick`, { target_id: m.user_id }, () => setMembers(prev => prev.filter(x => x.user_id !== m.user_id))); },
-    });
-
-    const doPromoteMod = (m: Member) => showDlg({
-        title: 'Designar moderador',
-        message: `¿Promover a ${m.first_name} ${m.last_name} a moderador?`,
-        confirmLabel: 'Promover', onCancel: hideDlg,
-        onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/promote`, { target_id: m.user_id }, () => setMembers(prev => prev.map(x => x.user_id === m.user_id ? { ...x, role: 'moderator' } : x))); },
-    });
-
-    const doDemoteMod = (m: Member) => showDlg({
-        title: 'Quitar moderador',
-        message: `¿Quitar el rango de moderador a ${m.first_name} ${m.last_name}?`,
-        confirmLabel: 'Quitar', danger: true, onCancel: hideDlg,
-        onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/demote`, { target_id: m.user_id }, () => setMembers(prev => prev.map(x => x.user_id === m.user_id ? { ...x, role: 'member' } : x))); },
-    });
-
-    const doTransfer = (m: Member) => showDlg({
-        title: 'Transferir liderazgo',
-        message: `¿Transferir el liderazgo a ${m.first_name} ${m.last_name}? Pasarás a ser moderador.`,
-        confirmLabel: 'Transferir', danger: true, onCancel: hideDlg,
-        onConfirm: () => {
-            hideDlg(); setActionLoading(m.user_id);
-            doAction(`${API_URL}/communities/${communityID}/transfer`, { target_id: m.user_id }, () => {
-                setMembers(prev => prev.map(x => {
-                    if (x.user_id === myUserID) return { ...x, role: 'moderator' };
-                    if (x.user_id === m.user_id) return { ...x, role: 'owner' };
-                    return x;
-                }));
-                onClose();
-            });
-        },
-    });
+    const doKick = (m: Member) => showDlg({ title: 'Expulsar miembro', message: `¿Expulsar a ${m.first_name} ${m.last_name}?`, confirmLabel: 'Expulsar', danger: true, onCancel: hideDlg, onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/kick`, { target_id: m.user_id }, () => setMembers(prev => prev.filter(x => x.user_id !== m.user_id))); } });
+    const doPromoteMod = (m: Member) => showDlg({ title: 'Designar moderador', message: `¿Promover a ${m.first_name} ${m.last_name} a moderador?`, confirmLabel: 'Promover', onCancel: hideDlg, onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/promote`, { target_id: m.user_id }, () => setMembers(prev => prev.map(x => x.user_id === m.user_id ? { ...x, role: 'moderator' } : x))); } });
+    const doDemoteMod = (m: Member) => showDlg({ title: 'Quitar moderador', message: `¿Quitar el rango de moderador a ${m.first_name} ${m.last_name}?`, confirmLabel: 'Quitar', danger: true, onCancel: hideDlg, onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/demote`, { target_id: m.user_id }, () => setMembers(prev => prev.map(x => x.user_id === m.user_id ? { ...x, role: 'member' } : x))); } });
+    const doTransfer = (m: Member) => showDlg({ title: 'Transferir liderazgo', message: `¿Transferir el liderazgo a ${m.first_name} ${m.last_name}? Pasarás a ser moderador.`, confirmLabel: 'Transferir', danger: true, onCancel: hideDlg, onConfirm: () => { hideDlg(); setActionLoading(m.user_id); doAction(`${API_URL}/communities/${communityID}/transfer`, { target_id: m.user_id }, () => { setMembers(prev => prev.map(x => { if (x.user_id === myUserID) return { ...x, role: 'moderator' }; if (x.user_id === m.user_id) return { ...x, role: 'owner' }; return x; })); onClose(); }); } });
 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <View style={mg.wrap}>
                 <SafeAreaView style={mg.sheet}>
                     <View style={mg.header}>
-                        <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <MaterialIcons name="arrow-back" size={22} color="#e8f4f8" />
-                        </TouchableOpacity>
+                        <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><MaterialIcons name="arrow-back" size={22} color="#e8f4f8" /></TouchableOpacity>
                         <Text style={mg.headerTitle}>Miembros ({members.length})</Text>
                         <TouchableOpacity onPress={load}><MaterialIcons name="refresh" size={20} color="#3d5a70" /></TouchableOpacity>
                     </View>
-
                     {error ? <View style={mg.errorBanner}><MaterialIcons name="error-outline" size={14} color="#e05c5c" /><Text style={mg.errorText}>{error}</Text></View> : null}
-
                     {loading ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 40 }} /> : (
-                        <FlatList
-                            data={members} keyExtractor={m => m.user_id}
-                            contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 40 }}
-                            renderItem={({ item: m }) => (
-                                <View style={mg.memberCard}>
-                                    <View style={mg.memberAvatar}>
-                                        <Text style={mg.memberAvatarTxt}>{m.first_name.charAt(0).toUpperCase()}</Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <Text style={mg.memberName}>{m.first_name} {m.last_name}</Text>
-                                            <RoleBadge role={m.role} />
-                                        </View>
-                                        <Text style={mg.memberSince}>Desde {timeAgo(m.joined_at)}</Text>
-                                    </View>
-                                    {actionLoading === m.user_id ? (
-                                        <ActivityIndicator color="#00b4d8" size="small" />
-                                    ) : (
-                                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                                            {canPromoteMod(m) && <TouchableOpacity style={mg.actionBtn} onPress={() => doPromoteMod(m)}><MaterialIcons name="star-outline" size={16} color="#7b68ee" /></TouchableOpacity>}
-                                            {canDemoteMod(m) && <TouchableOpacity style={mg.actionBtn} onPress={() => doDemoteMod(m)}><MaterialIcons name="star" size={16} color="#7b68ee" /></TouchableOpacity>}
-                                            {canTransfer(m) && <TouchableOpacity style={mg.actionBtn} onPress={() => doTransfer(m)}><MaterialIcons name="swap-horiz" size={16} color="#f5a623" /></TouchableOpacity>}
-                                            {canKick(m) && <TouchableOpacity style={[mg.actionBtn, { borderColor: '#e05c5c' }]} onPress={() => doKick(m)}><MaterialIcons name="person-remove" size={16} color="#e05c5c" /></TouchableOpacity>}
-                                        </View>
-                                    )}
-                                </View>
-                            )}
-                            ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60, gap: 10 }}><MaterialIcons name="people" size={48} color="#1e3a5a" /><Text style={{ color: '#3d5a70', fontSize: 14 }}>Sin miembros</Text></View>}
+                        <FlatList data={members} keyExtractor={m => m.user_id} contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 40 }}
+                                  renderItem={({ item: m }) => (
+                                      <View style={mg.memberCard}>
+                                          <View style={mg.memberAvatar}><Text style={mg.memberAvatarTxt}>{m.first_name.charAt(0).toUpperCase()}</Text></View>
+                                          <View style={{ flex: 1 }}>
+                                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={mg.memberName}>{m.first_name} {m.last_name}</Text><RoleBadge role={m.role} /></View>
+                                              <Text style={mg.memberSince}>Desde {timeAgo(m.joined_at)}</Text>
+                                          </View>
+                                          {actionLoading === m.user_id ? <ActivityIndicator color="#00b4d8" size="small" /> : (
+                                              <View style={{ flexDirection: 'row', gap: 6 }}>
+                                                  {canPromoteMod(m) && <TouchableOpacity style={mg.actionBtn} onPress={() => doPromoteMod(m)}><MaterialIcons name="star-outline" size={16} color="#7b68ee" /></TouchableOpacity>}
+                                                  {canDemoteMod(m) && <TouchableOpacity style={mg.actionBtn} onPress={() => doDemoteMod(m)}><MaterialIcons name="star" size={16} color="#7b68ee" /></TouchableOpacity>}
+                                                  {canTransfer(m) && <TouchableOpacity style={mg.actionBtn} onPress={() => doTransfer(m)}><MaterialIcons name="swap-horiz" size={16} color="#f5a623" /></TouchableOpacity>}
+                                                  {canKick(m) && <TouchableOpacity style={[mg.actionBtn, { borderColor: '#e05c5c' }]} onPress={() => doKick(m)}><MaterialIcons name="person-remove" size={16} color="#e05c5c" /></TouchableOpacity>}
+                                              </View>
+                                          )}
+                                      </View>
+                                  )}
+                                  ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60, gap: 10 }}><MaterialIcons name="people" size={48} color="#1e3a5a" /><Text style={{ color: '#3d5a70', fontSize: 14 }}>Sin miembros</Text></View>}
                         />
                     )}
                 </SafeAreaView>
@@ -301,9 +427,7 @@ function RequestsModal({ visible, communityID, onClose }: { visible: boolean; co
     const resolve = async (userID: string, approve: boolean) => {
         setActionLoading(userID);
         try {
-            const res = await authFetch(`${API_URL}/communities/${communityID}/requests/resolve`, {
-                method: 'POST', body: JSON.stringify({ applicant_id: userID, approve }),
-            });
+            const res = await authFetch(`${API_URL}/communities/${communityID}/requests/resolve`, { method: 'POST', body: JSON.stringify({ applicant_id: userID, approve }) });
             if (res.ok) setRequests(prev => prev.filter(r => r.user_id !== userID));
             else setError(await res.text());
         } catch { setError('Sin conexión'); }
@@ -321,15 +445,11 @@ function RequestsModal({ visible, communityID, onClose }: { visible: boolean; co
                     </View>
                     {error ? <View style={mg.errorBanner}><MaterialIcons name="error-outline" size={14} color="#e05c5c" /><Text style={mg.errorText}>{error}</Text></View> : null}
                     {loading ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 40 }} /> : (
-                        <FlatList data={requests} keyExtractor={r => r.user_id}
-                                  contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 40 }}
+                        <FlatList data={requests} keyExtractor={r => r.user_id} contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 40 }}
                                   renderItem={({ item: r }) => (
                                       <View style={mg.memberCard}>
                                           <View style={mg.memberAvatar}><MaterialIcons name="person" size={18} color="#00b4d8" /></View>
-                                          <View style={{ flex: 1 }}>
-                                              <Text style={mg.memberName}>{r.user_id.slice(0, 8)}...</Text>
-                                              <Text style={mg.memberSince}>Solicitó {timeAgo(r.created_at)}</Text>
-                                          </View>
+                                          <View style={{ flex: 1 }}><Text style={mg.memberName}>{r.user_id.slice(0, 8)}...</Text><Text style={mg.memberSince}>Solicitó {timeAgo(r.created_at)}</Text></View>
                                           {actionLoading === r.user_id ? <ActivityIndicator color="#00b4d8" size="small" /> : (
                                               <View style={{ flexDirection: 'row', gap: 8 }}>
                                                   <TouchableOpacity style={[mg.actionBtn, { borderColor: '#34c78a' }]} onPress={() => resolve(r.user_id, true)}><MaterialIcons name="check" size={16} color="#34c78a" /></TouchableOpacity>
@@ -361,18 +481,14 @@ function EditCommunityModal({ visible, community, onClose, onSaved }: {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    React.useEffect(() => {
-        if (visible) { setName(community.name); setDescription(community.description); setRules(community.rules); setError(''); }
-    }, [visible]);
+    React.useEffect(() => { if (visible) { setName(community.name); setDescription(community.description); setRules(community.rules); setError(''); } }, [visible]);
 
     const save = async () => {
         if (!name.trim()) { setError('El nombre es obligatorio'); return; }
         if (name.length > 64) { setError('Máximo 64 caracteres'); return; }
         setLoading(true); setError('');
         try {
-            const res = await authFetch(`${API_URL}/communities/${community.id}`, {
-                method: 'PUT', body: JSON.stringify({ name: name.trim(), description: description.trim(), rules: rules.trim() }),
-            });
+            const res = await authFetch(`${API_URL}/communities/${community.id}`, { method: 'PUT', body: JSON.stringify({ name: name.trim(), description: description.trim(), rules: rules.trim() }) });
             if (res.ok) { onSaved({ name: name.trim(), description: description.trim(), rules: rules.trim() }); onClose(); }
             else setError(await res.text() || 'Error al guardar');
         } catch { setError('Sin conexión'); }
@@ -385,26 +501,12 @@ function EditCommunityModal({ visible, community, onClose, onSaved }: {
                 <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }} keyboardShouldPersistTaps="handled">
                     <View style={[s.modalSheet, { paddingBottom: 48 }]}>
                         <View style={s.modalHandle} />
-                        <View style={s.modalHeader}>
-                            <Text style={s.modalTitle}>Editar comunidad</Text>
-                            <TouchableOpacity onPress={onClose}><MaterialIcons name="close" size={22} color="#7a9ab0" /></TouchableOpacity>
-                        </View>
-                        <View style={s.fieldGroup}>
-                            <View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Nombre <Text style={s.required}>*</Text></Text><Text style={[s.charCount, (64 - name.length) < 10 && s.charWarn]}>{64 - name.length}</Text></View>
-                            <TextInput style={s.modalInput} value={name} onChangeText={t => { setName(t); setError(''); }} maxLength={64} placeholderTextColor="#3d5a70" placeholder="Nombre de la comunidad" />
-                        </View>
-                        <View style={s.fieldGroup}>
-                            <View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Descripción</Text><Text style={[s.charCount, (512 - description.length) < 50 && s.charWarn]}>{512 - description.length}</Text></View>
-                            <TextInput style={[s.modalInput, { height: 90, paddingTop: 12 }]} value={description} onChangeText={setDescription} maxLength={512} multiline textAlignVertical="top" placeholderTextColor="#3d5a70" placeholder="Descripción" />
-                        </View>
-                        <View style={s.fieldGroup}>
-                            <View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Reglas</Text><Text style={[s.charCount, (512 - rules.length) < 50 && s.charWarn]}>{512 - rules.length}</Text></View>
-                            <TextInput style={[s.modalInput, { height: 90, paddingTop: 12 }]} value={rules} onChangeText={setRules} maxLength={512} multiline textAlignVertical="top" placeholderTextColor="#3d5a70" placeholder="Reglas" />
-                        </View>
+                        <View style={s.modalHeader}><Text style={s.modalTitle}>Editar comunidad</Text><TouchableOpacity onPress={onClose}><MaterialIcons name="close" size={22} color="#7a9ab0" /></TouchableOpacity></View>
+                        <View style={s.fieldGroup}><View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Nombre <Text style={s.required}>*</Text></Text><Text style={[s.charCount, (64 - name.length) < 10 && s.charWarn]}>{64 - name.length}</Text></View><TextInput style={s.modalInput} value={name} onChangeText={t => { setName(t); setError(''); }} maxLength={64} placeholderTextColor="#3d5a70" placeholder="Nombre de la comunidad" /></View>
+                        <View style={s.fieldGroup}><View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Descripción</Text><Text style={[s.charCount, (512 - description.length) < 50 && s.charWarn]}>{512 - description.length}</Text></View><TextInput style={[s.modalInput, { height: 90, paddingTop: 12 }]} value={description} onChangeText={setDescription} maxLength={512} multiline textAlignVertical="top" placeholderTextColor="#3d5a70" placeholder="Descripción" /></View>
+                        <View style={s.fieldGroup}><View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Reglas</Text><Text style={[s.charCount, (512 - rules.length) < 50 && s.charWarn]}>{512 - rules.length}</Text></View><TextInput style={[s.modalInput, { height: 90, paddingTop: 12 }]} value={rules} onChangeText={setRules} maxLength={512} multiline textAlignVertical="top" placeholderTextColor="#3d5a70" placeholder="Reglas" /></View>
                         {error ? <View style={s.globalError}><MaterialIcons name="error-outline" size={14} color="#e05c5c" /><Text style={s.globalErrorText}>{error}</Text></View> : null}
-                        <TouchableOpacity style={[s.primaryBtn, loading && { opacity: 0.6 }]} onPress={save} disabled={loading}>
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Guardar cambios</Text>}
-                        </TouchableOpacity>
+                        <TouchableOpacity style={[s.primaryBtn, loading && { opacity: 0.6 }]} onPress={save} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Guardar cambios</Text>}</TouchableOpacity>
                     </View>
                 </ScrollView>
             </View>
@@ -414,11 +516,21 @@ function EditCommunityModal({ visible, community, onClose, onSaved }: {
 
 // ─── Thread Modal ─────────────────────────────────────────────────────────────
 
-function ThreadModal({ visible, rootPost, isMember, onClose }: {
-    visible: boolean; rootPost: Post | null; isMember: boolean; onClose: () => void;
+function ThreadModal({ visible, rootPost, isMember, myUserID, myRole, onClose, onPostEdited }: {
+    visible: boolean; rootPost: Post | null; isMember: boolean;
+    myUserID: string; myRole: string; onClose: () => void;
+    onPostEdited: (id: string, newTitle: string, newContent: string) => void;
 }) {
     const [stack, setStack] = useState<StackFrame[]>([]);
     const scrollRef = useRef<ScrollView>(null);
+    const { state: dlg, show: showDlg, hide: hideDlg } = useConfirm();
+
+    // Edit comment modal state
+    const [editingComment, setEditingComment] = useState<Reply | null>(null);
+    const [showEditComment, setShowEditComment] = useState(false);
+
+    // Edit root post modal state (from inside ThreadModal)
+    const [showEditPost, setShowEditPost] = useState(false);
 
     React.useEffect(() => {
         if (visible && rootPost) {
@@ -486,6 +598,35 @@ function ThreadModal({ visible, rootPost, isMember, onClose }: {
         }
     };
 
+    const handleDeleteReply = (frameIdx: number, reply: Reply) => {
+        showDlg({
+            title: 'Borrar comentario', message: '¿Confirmar eliminación?',
+            confirmLabel: 'Borrar', danger: true, onCancel: hideDlg,
+            onConfirm: async () => {
+                hideDlg();
+                try {
+                    const res = await authFetch(`${API_URL}/posts/${reply.id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        setStack(prev => prev.map((f, i) => i !== frameIdx ? f : { ...f, replies: f.replies.filter(r => r.id !== reply.id) }));
+                    }
+                } catch { }
+            },
+        });
+    };
+
+    const handleCommentEdited = (commentID: string, newContent: string) => {
+        setStack(prev => prev.map(f => ({
+            ...f,
+            replies: f.replies.map(r => r.id === commentID ? { ...r, content: newContent } : r),
+        })));
+    };
+
+    // Edición del post raíz dentro del ThreadModal (idx=0 siempre)
+    const handleRootPostEdited = (id: string, newTitle: string, newContent: string) => {
+        setStack(prev => prev.map((f, i) => i === 0 ? { ...f, post: { ...f.post, title: newTitle, content: newContent } } : f));
+        onPostEdited(id, newTitle, newContent);
+    };
+
     const submitReply = async (idx: number) => {
         const frame = stack[idx]; if (!frame) return;
         const text = frame.commentText.trim();
@@ -507,6 +648,10 @@ function ThreadModal({ visible, rootPost, isMember, onClose }: {
     const depth = idx;
     const charLeft = POST_CONTENT_MAX - frame.commentText.length;
 
+    // El post raíz siempre está en stack[0]
+    const rootFrame = stack[0];
+    const isRootPostAuthor = rootFrame?.post.author_id === myUserID;
+
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={popStack}>
             <View style={th.wrap}>
@@ -519,6 +664,16 @@ function ThreadModal({ visible, rootPost, isMember, onClose }: {
                             <Text style={th.headerTitle} numberOfLines={1}>{depth === 0 ? (frame.post.title || 'Post') : frame.post.author_name}</Text>
                             {depth > 0 && <Text style={th.headerSub} numberOfLines={1}>Respondiendo a {stack[depth - 1]?.post.author_name ?? ''}</Text>}
                         </View>
+                        {/* Botón editar post raíz cuando estamos en el nivel 0 y somos autores */}
+                        {depth === 0 && isRootPostAuthor && (
+                            <TouchableOpacity
+                                onPress={() => setShowEditPost(true)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={{ marginRight: 4 }}
+                            >
+                                <MaterialIcons name="edit" size={20} color="#7a9ab0" />
+                            </TouchableOpacity>
+                        )}
                         {depth > 0 && <View style={th.depthBadge}><Text style={th.depthText}>Niv. {depth + 1}</Text></View>}
                     </View>
 
@@ -557,8 +712,15 @@ function ThreadModal({ visible, rootPost, isMember, onClose }: {
                         {frame.loading ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 20 }} /> :
                             frame.replies.length === 0 ? <View style={th.emptyBox}><MaterialIcons name="chat-bubble-outline" size={36} color="#1e3a5a" /><Text style={th.emptyText}>Sé el primero en responder</Text></View> :
                                 frame.replies.map(r => (
-                                    <ReplyCard key={r.id} reply={r} voteState={frame.votes[r.id] ?? null}
-                                               onVote={(up) => handleVoteReply(idx, r.id, up)} onPress={() => pushReply(r)} />
+                                    <ReplyCard
+                                        key={r.id} reply={r} voteState={frame.votes[r.id] ?? null}
+                                        onVote={(up) => handleVoteReply(idx, r.id, up)}
+                                        onPress={() => pushReply(r)}
+                                        myUserID={myUserID}
+                                        myRole={myRole}
+                                        onDelete={() => handleDeleteReply(idx, r)}
+                                        onEdit={() => { setEditingComment(r); setShowEditComment(true); }}
+                                    />
                                 ))}
                         <View style={{ height: 130 }} />
                     </ScrollView>
@@ -581,21 +743,74 @@ function ThreadModal({ visible, rootPost, isMember, onClose }: {
                     )}
                 </SafeAreaView>
             </View>
+
+            <ConfirmDialog {...dlg} />
+            <EditCommentModal
+                visible={showEditComment}
+                comment={editingComment}
+                onClose={() => { setShowEditComment(false); setEditingComment(null); }}
+                onSaved={handleCommentEdited}
+            />
+            {/* Modal para editar el post raíz desde dentro del thread */}
+            <EditPostModal
+                visible={showEditPost}
+                post={rootFrame?.post ?? null}
+                onClose={() => setShowEditPost(false)}
+                onSaved={handleRootPostEdited}
+            />
         </Modal>
     );
 }
 
-function ReplyCard({ reply, voteState, onVote, onPress }: { reply: Reply; voteState: VoteState; onVote: (up: boolean) => void; onPress: () => void }) {
+// ─── Reply Card ───────────────────────────────────────────────────────────────
+
+function ReplyCard({ reply, voteState, onVote, onPress, myUserID, myRole, onDelete, onEdit }: {
+    reply: Reply; voteState: VoteState; onVote: (up: boolean) => void; onPress: () => void;
+    myUserID: string; myRole: string;
+    onDelete: () => void; onEdit: () => void;
+}) {
     const score = reply.upvotes - reply.downvotes;
+    const isOwn = reply.author_id === myUserID;
+    const canDelete = isOwn || myRole === 'owner' || myRole === 'moderator';
+    const canEdit = isOwn;
+
     return (
         <TouchableOpacity style={th.replyCard} onPress={onPress} activeOpacity={0.8}>
             <View style={th.replyHeader}>
                 <View style={th.replyAvatar}><Text style={th.replyAvatarTxt}>{reply.author_name?.charAt(0).toUpperCase() ?? '?'}</Text></View>
                 <View style={{ flex: 1 }}><Text style={th.replyAuthor}>{reply.author_name}</Text><Text style={th.replyTime}>{timeAgo(reply.created_at)}</Text></View>
-                {reply.comment_count > 0 && <View style={th.repliesHint}><MaterialIcons name="chat-bubble-outline" size={11} color="#7a9ab0" /><Text style={th.repliesHintTxt}>{reply.comment_count}</Text></View>}
-                <MaterialIcons name="chevron-right" size={16} color="#3d5a70" style={{ marginLeft: 4 }} />
+
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {canEdit && (
+                        <TouchableOpacity
+                            style={th.replyActionBtn}
+                            onPress={e => { e.stopPropagation(); onEdit(); }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <MaterialIcons name="edit" size={14} color="#7a9ab0" />
+                        </TouchableOpacity>
+                    )}
+                    {canDelete && (
+                        <TouchableOpacity
+                            style={th.replyActionBtn}
+                            onPress={e => { e.stopPropagation(); onDelete(); }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <MaterialIcons name="delete-outline" size={14} color="#e05c5c" />
+                        </TouchableOpacity>
+                    )}
+                    {reply.comment_count > 0 && (
+                        <View style={th.repliesHint}>
+                            <MaterialIcons name="chat-bubble-outline" size={11} color="#7a9ab0" />
+                            <Text style={th.repliesHintTxt}>{reply.comment_count}</Text>
+                        </View>
+                    )}
+                    <MaterialIcons name="chevron-right" size={16} color="#3d5a70" style={{ marginLeft: 2 }} />
+                </View>
             </View>
+
             <Text style={th.replyContent}>{reply.content}</Text>
+
             <View style={th.voteBar}>
                 <TouchableOpacity style={[th.voteBtn, voteState === 'up' && th.voteBtnUp]} onPress={e => { e.stopPropagation(); onVote(true); }}>
                     <MaterialIcons name="keyboard-arrow-up" size={17} color={voteState === 'up' ? '#34c78a' : '#3d5a70'} />
@@ -613,11 +828,16 @@ function ReplyCard({ reply, voteState, onVote, onPress }: { reply: Reply; voteSt
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
-function PostCard({ post, myRole, myUserID, voteState, onVote, onDeleteRequest, onPress }: {
+function PostCard({ post, myRole, myUserID, voteState, onVote, onDeleteRequest, onEditRequest, onPress }: {
     post: Post; myRole: string; myUserID: string; voteState: VoteState;
-    onVote: (id: string, up: boolean) => void; onDeleteRequest: (id: string) => void; onPress: () => void;
+    onVote: (id: string, up: boolean) => void;
+    onDeleteRequest: (id: string) => void;
+    onEditRequest: (post: Post) => void;
+    onPress: () => void;
 }) {
-    const canDelete = post.author_id === myUserID || myRole === 'owner' || myRole === 'moderator';
+    const isAuthor = post.author_id === myUserID;
+    const canDelete = isAuthor || myRole === 'owner' || myRole === 'moderator';
+    const canEdit = isAuthor;
     const score = post.upvotes - post.downvotes;
     return (
         <TouchableOpacity style={s.postCard} onPress={onPress} activeOpacity={0.85}>
@@ -626,7 +846,24 @@ function PostCard({ post, myRole, myUserID, voteState, onVote, onDeleteRequest, 
                     <View style={s.postAvatar}><Text style={s.postAvatarText}>{post.author_name?.charAt(0).toUpperCase() ?? '?'}</Text></View>
                     <View><Text style={s.postAuthor}>{post.author_name}</Text><Text style={s.postTime}>{timeAgo(post.created_at)}</Text></View>
                 </View>
-                {canDelete && <TouchableOpacity onPress={e => { e.stopPropagation(); onDeleteRequest(post.id); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><MaterialIcons name="delete-outline" size={18} color="#3d5a70" /></TouchableOpacity>}
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    {canEdit && (
+                        <TouchableOpacity
+                            onPress={e => { e.stopPropagation(); onEditRequest(post); }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <MaterialIcons name="edit" size={17} color="#3d5a70" />
+                        </TouchableOpacity>
+                    )}
+                    {canDelete && (
+                        <TouchableOpacity
+                            onPress={e => { e.stopPropagation(); onDeleteRequest(post.id); }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <MaterialIcons name="delete-outline" size={18} color="#3d5a70" />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
             {post.title ? <Text style={s.postTitle}>{post.title}</Text> : null}
             <Text style={s.postContent} numberOfLines={4}>{post.content}</Text>
@@ -724,9 +961,13 @@ export default function CommunityDetailScreen() {
     const [showMembers, setShowMembers] = useState(false);
     const [showRequests, setShowRequests] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
+
+    // Estado para editar un post desde la lista
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+    const [showEditPost, setShowEditPost] = useState(false);
+
     const { state: dlg, show: showDlg, hide: hideDlg } = useConfirm();
 
-    // Cargar userID del token al montar
     React.useEffect(() => { getMyUserID().then(setMyUserID); }, []);
 
     const loadRole = useCallback(async () => {
@@ -826,6 +1067,15 @@ export default function CommunityDetailScreen() {
         });
     };
 
+    // Actualizar el post en la lista después de editarlo (desde la lista o desde el thread)
+    const handlePostEdited = (id: string, newTitle: string, newContent: string) => {
+        setPosts(prev => prev.map(p => p.id === id ? { ...p, title: newTitle, content: newContent } : p));
+        // Si el post editado es el que está abierto en el thread, actualizarlo también
+        if (selectedPost?.id === id) {
+            setSelectedPost(prev => prev ? { ...prev, title: newTitle, content: newContent } : prev);
+        }
+    };
+
     const searchPosts = async () => {
         if (!postQuery.trim()) { loadPosts(); return; }
         setSearching(true);
@@ -844,18 +1094,13 @@ export default function CommunityDetailScreen() {
 
     return (
         <SafeAreaView style={s.root}>
-            {/* Header con back + home */}
             <View style={s.header}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <MaterialIcons name="arrow-back" size={24} color="#e8f4f8" />
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><MaterialIcons name="arrow-back" size={24} color="#e8f4f8" /></TouchableOpacity>
                 <Text style={s.headerTitle} numberOfLines={1}>{communityInfo.name}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {/* Botón home → tab comunidad */}
                     <TouchableOpacity onPress={() => router.replace('/home?tab=community')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <MaterialIcons name="home" size={24} color="#3d5a70" />
                     </TouchableOpacity>
-                    {/* Abandonar (solo si es miembro y no owner) */}
                     {isMember && myRole !== 'owner' && (
                         <TouchableOpacity onPress={handleLeave} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                             <MaterialIcons name="exit-to-app" size={22} color="#e05c5c" />
@@ -906,7 +1151,18 @@ export default function CommunityDetailScreen() {
                     </View>
                     {loadingPosts || searching ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 40 }} /> : (
                         <FlatList data={posts} keyExtractor={p => p.id}
-                                  renderItem={({ item }) => <PostCard post={item} myRole={myRole} myUserID={myUserID} voteState={votes[item.id] ?? null} onVote={handleVote} onDeleteRequest={handleDeletePost} onPress={() => { setSelectedPost(item); setShowPostDetail(true); }} />}
+                                  renderItem={({ item }) => (
+                                      <PostCard
+                                          post={item}
+                                          myRole={myRole}
+                                          myUserID={myUserID}
+                                          voteState={votes[item.id] ?? null}
+                                          onVote={handleVote}
+                                          onDeleteRequest={handleDeletePost}
+                                          onEditRequest={post => { setEditingPost(post); setShowEditPost(true); }}
+                                          onPress={() => { setSelectedPost(item); setShowPostDetail(true); }}
+                                      />
+                                  )}
                                   contentContainerStyle={s.postList}
                                   refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00b4d8" />}
                                   ListEmptyComponent={<View style={s.emptyBox}><MaterialIcons name="article" size={48} color="#1e3a5a" /><Text style={s.emptyTitle}>{!isMember ? 'Unite para ver los posts' : 'Todavía no hay posts'}</Text>{isMember && <Text style={s.emptyText}>¡Sé el primero en publicar!</Text>}</View>}
@@ -936,16 +1192,8 @@ export default function CommunityDetailScreen() {
 
             {activeTab === 'manage' && canManage && (
                 <ScrollView contentContainerStyle={s.aboutContent}>
-                    {communityInfo.is_private && (
-                        <View style={s.aboutCard}>
-                            <Text style={s.aboutCardTitle}>Solicitudes</Text>
-                            <ManageRow icon="pending-actions" label="Ver solicitudes pendientes" sub="Aprobar o rechazar nuevos miembros" onPress={() => setShowRequests(true)} />
-                        </View>
-                    )}
-                    <View style={s.aboutCard}>
-                        <Text style={s.aboutCardTitle}>Miembros</Text>
-                        <ManageRow icon="manage-accounts" label="Gestionar miembros" sub="Ver, expulsar o cambiar roles" onPress={() => setShowMembers(true)} />
-                    </View>
+                    {communityInfo.is_private && <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Solicitudes</Text><ManageRow icon="pending-actions" label="Ver solicitudes pendientes" sub="Aprobar o rechazar nuevos miembros" onPress={() => setShowRequests(true)} /></View>}
+                    <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Miembros</Text><ManageRow icon="manage-accounts" label="Gestionar miembros" sub="Ver, expulsar o cambiar roles" onPress={() => setShowMembers(true)} /></View>
                     {myRole === 'owner' && (
                         <View style={s.aboutCard}>
                             <Text style={s.aboutCardTitle}>Comunidad</Text>
@@ -957,10 +1205,27 @@ export default function CommunityDetailScreen() {
             )}
 
             <CreatePostModal visible={showCreatePost} communityID={communityInfo.id} onClose={() => setShowCreatePost(false)} onCreated={loadPosts} />
-            <ThreadModal visible={showPostDetail} rootPost={selectedPost} isMember={isMember} onClose={() => { setShowPostDetail(false); setSelectedPost(null); loadPosts(); }} />
+            <ThreadModal
+                visible={showPostDetail}
+                rootPost={selectedPost}
+                isMember={isMember}
+                myUserID={myUserID}
+                myRole={myRole}
+                onPostEdited={handlePostEdited}
+                onClose={() => { setShowPostDetail(false); setSelectedPost(null); loadPosts(); }}
+            />
             <MembersModal visible={showMembers} communityID={communityInfo.id} myRole={myRole} myUserID={myUserID} onClose={() => setShowMembers(false)} />
             <RequestsModal visible={showRequests} communityID={communityInfo.id} onClose={() => setShowRequests(false)} />
             <EditCommunityModal visible={showEdit} community={communityInfo} onClose={() => setShowEdit(false)} onSaved={(updated) => setCommunityInfo(prev => ({ ...prev, ...updated }))} />
+
+            {/* Modal de edición de post desde la lista */}
+            <EditPostModal
+                visible={showEditPost}
+                post={editingPost}
+                onClose={() => { setShowEditPost(false); setEditingPost(null); }}
+                onSaved={(id, newTitle, newContent) => { handlePostEdited(id, newTitle, newContent); setShowEditPost(false); setEditingPost(null); }}
+            />
+
             <ConfirmDialog {...dlg} />
         </SafeAreaView>
     );
@@ -1004,6 +1269,7 @@ const th = StyleSheet.create({
     replyAuthor: { color: '#e8f4f8', fontWeight: '600', fontSize: 13 },
     replyTime: { color: '#3d5a70', fontSize: 11 },
     replyContent: { color: '#7a9ab0', fontSize: 14, lineHeight: 20 },
+    replyActionBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#0d1826', borderWidth: 1, borderColor: '#1a2d42', alignItems: 'center', justifyContent: 'center' },
     repliesHint: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#0d1826', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
     repliesHintTxt: { color: '#7a9ab0', fontSize: 10 },
     voteBar: { flexDirection: 'row', alignItems: 'center', gap: 6 },

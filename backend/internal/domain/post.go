@@ -40,8 +40,8 @@ type PostRepository interface {
 }
 
 func (p *Post) Edit(title, content, url string) error {
-	if title == "" || content == "" {
-		return errors.New("El post debe tener un título o contenido")
+	if content == "" {
+		return errors.New("El contenido no puede estar vacío")
 	}
 	p.Title = title
 	p.Content = content

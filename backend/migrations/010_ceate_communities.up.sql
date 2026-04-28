@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS community_join_requests (
     status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
     created_at TIMESTAMP DEFAULT NOW(),
 
-    PRIMARY KEY (community_id, user_id),
+    PRIMARY KEY (community_id, user_id, created_at),
     CONSTRAINT fk_community_req FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
     CONSTRAINT fk_user_req FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
