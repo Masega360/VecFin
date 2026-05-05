@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -104,31 +105,43 @@ type klinesResponse [][]interface{}
 
 func (c *Client) GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetails, error) {
 	base := strings.ToUpper(symbol)
-
-	// Intentar pares en orden de preferencia
 	quotes := []string{"USDT", "BUSD", "BTC", "BNB", "ETH"}
-	var pair string
-	var t24 ticker24hResponse
-	for _, q := range quotes {
-		candidate := base + q
-		req24, _ := http.NewRequest(http.MethodGet, baseURL+"/api/v3/ticker/24hr?symbol="+candidate, nil)
-		resp24, err := c.http.Do(req24)
-		if err != nil {
-			continue
-		}
-		if resp24.StatusCode == http.StatusOK {
-			if err := json.NewDecoder(resp24.Body).Decode(&t24); err == nil && t24.LastPrice != "" {
-				pair = candidate
-				resp24.Body.Close()
-				break
-			}
-		}
-		resp24.Body.Close()
+
+	type pairResult struct {
+		pair string
+		t24  ticker24hResponse
 	}
 
-	if pair == "" {
+	found := make(chan pairResult, 1)
+	var wg sync.WaitGroup
+	for _, q := range quotes {
+		wg.Add(1)
+		go func(candidate string) {
+			defer wg.Done()
+			req, _ := http.NewRequest(http.MethodGet, baseURL+"/api/v3/ticker/24hr?symbol="+candidate, nil)
+			resp, err := c.http.Do(req)
+			if err != nil || resp.StatusCode != http.StatusOK {
+				if resp != nil { resp.Body.Close() }
+				return
+			}
+			var t ticker24hResponse
+			if json.NewDecoder(resp.Body).Decode(&t) == nil && t.LastPrice != "" {
+				select {
+				case found <- pairResult{candidate, t}:
+				default:
+				}
+			}
+			resp.Body.Close()
+		}(base + q)
+	}
+	go func() { wg.Wait(); close(found) }()
+
+	res, ok := <-found
+	if !ok {
 		return nil, domain.ErrAssetNotFound
 	}
+	pair := res.pair
+	t24  := res.t24
 
 	price, _     := strconv.ParseFloat(t24.LastPrice, 64)
 	change, _    := strconv.ParseFloat(t24.PriceChange, 64)
