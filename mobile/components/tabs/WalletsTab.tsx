@@ -16,6 +16,8 @@ interface Wallet {
   api_key?: string;
   created_at: string;
   last_sync?: string;
+  total_value?: number;
+  currency?: string;
 }
 
 interface PlatformItem {
@@ -62,8 +64,22 @@ export default function WalletsTab() {
       const res = await fetch(`${API_URL}/wallets`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setWallets(await res.json() ?? []);
-      else setListError('Error al cargar wallets');
+      if (!res.ok) { setListError('Error al cargar wallets'); return; }
+      const list: Wallet[] = await res.json() ?? [];
+
+      // Cargar total_value de cada wallet en paralelo
+      const details = await Promise.allSettled(
+        list.map(w =>
+          fetch(`${API_URL}/wallets/${w.id}/details`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(r => r.ok ? r.json() : null)
+        )
+      );
+
+      setWallets(list.map((w, i) => {
+        const d = details[i].status === 'fulfilled' ? details[i].value : null;
+        return { ...w, total_value: d?.total_value, currency: d?.currency };
+      }));
     } catch {
       setListError('Sin conexión al servidor');
     } finally {
@@ -344,6 +360,11 @@ export default function WalletsTab() {
                     </Text>
                   ) : null}
                 </View>
+                {item.total_value != null && item.total_value > 0 && (
+                  <Text style={styles.totalValue}>
+                    {new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.currency || 'USD', maximumFractionDigits: 2 }).format(item.total_value)}
+                  </Text>
+                )}
               </View>
               <MaterialIcons name="chevron-right" size={22} color="#4a6a80" />
             </TouchableOpacity>
@@ -433,6 +454,7 @@ const styles = StyleSheet.create({
   badgeManual:    { backgroundColor: '#1e3a5a' },
   badgeText:      { color: '#00ADD8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   syncText:       { color: '#4a6a80', fontSize: 11 },
+  totalValue:     { color: '#00ADD8', fontSize: 15, fontWeight: '700', marginTop: 4 },
 
   // empty
   empty:      { alignItems: 'center', marginTop: 80, gap: 12 },
