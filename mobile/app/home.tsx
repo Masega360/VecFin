@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView, Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 
 import AssetsTab from '@/components/tabs/AssetsTab';
+import WalletsTab from '@/components/tabs/WalletsTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
+import CommunityTab from '@/components/tabs/CommunityTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -22,30 +25,53 @@ type TabConfig = {
 
 const TABS: TabConfig[] = [
   {
+    id: 'profile',
+    label: 'Perfil',
+    icon: 'person',
+    component: ProfileTab,
+  },
+  {
     id: 'assets',
     label: 'Assets',
     icon: 'trending-up',
     component: AssetsTab,
   },
   {
+    id: 'wallets',
+    label: 'Wallets',
+    icon: 'account-balance-wallet',
+    component: WalletsTab,
+  },
+  {
     id: 'community',
     label: 'Comunidad',
     icon: 'people',
-    component: null, // próximamente
-  },
-  {
-    id: 'profile',
-    label: 'Perfil',
-    icon: 'person',
-    component: ProfileTab,
+    component: CommunityTab, 
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function MainScreen() {
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const firstEnabled = TABS.find(t => t.component !== null)?.id ?? TABS[0].id;
-  const [activeTab, setActiveTab] = useState(firstEnabled);
+
+  // Arrancamos en la tab que venga por query param (?tab=wallets, etc).
+  // Sirve para que pantallas como wallet-detail puedan volver a la tab correcta.
+  const initialTab =
+    tabParam && TABS.some(t => t.id === tabParam && t.component !== null)
+      ? tabParam
+      : firstEnabled;
+
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Si cambia el query param después de montar (volver acá con router.replace)
+  // sincronizamos la tab.
+  useEffect(() => {
+    if (tabParam && TABS.some(t => t.id === tabParam && t.component !== null)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const current = TABS.find(t => t.id === activeTab);
   const TabContent = current?.component ?? null;

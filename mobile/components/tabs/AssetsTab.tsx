@@ -92,7 +92,7 @@ export default function AssetsTab() {
   const isFav = (symbol: string) => favorites.some(f => f.asset_id === symbol);
 
   const goToDetail = (symbol: string, name: string) => {
-    router.push({ pathname: '/asset-detail', params: { symbol, name } });
+    router.push({ pathname: '/asset-detail', params: { symbol, name, from: 'assets' } });
   };
 
   const renderAsset = ({ item }: { item: Asset }) => (

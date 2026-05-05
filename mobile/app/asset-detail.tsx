@@ -50,7 +50,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function AssetDetailScreen() {
-  const { symbol, name } = useLocalSearchParams<{ symbol: string; name: string }>();
+  const { symbol, name, from } = useLocalSearchParams<{
+    symbol: string;
+    name: string;
+    from?: string;      // tab de origen: 'assets' | 'wallets' | etc
+  }>();
   const router = useRouter();
 
   const [details,      setDetails]      = useState<AssetDetails | null>(null);
@@ -64,6 +68,12 @@ export default function AssetDetailScreen() {
 
   useEffect(() => { fetchInitial(); checkFav(); }, []);
   useEffect(() => { if (details) fetchHistory(range); }, [range]);
+
+  // Volvemos siempre a la tab de origen (from). router.back() en web
+  // no garantiza caer en la tab correcta, así que navegamos explícito.
+  const goBack = () => {
+    router.replace({ pathname: '/home', params: { tab: from || 'assets' } });
+  };
 
   const fetchInitial = async () => {
     setPageLoading(true);
@@ -148,7 +158,7 @@ export default function AssetDetailScreen() {
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={22} color="#8aaabf" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
