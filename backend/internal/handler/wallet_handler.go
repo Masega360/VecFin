@@ -17,7 +17,7 @@ type WalletUsecasePort interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error)
 	Read(ctx context.Context, id, userID uuid.UUID) (domain.Wallet, error)
 	Update(ctx context.Context, id, userID uuid.UUID, changes domain.Wallet) error
-	UpdateLastSync(ctx context.Context, id, userID uuid.UUID) error
+	SyncFromExchange(ctx context.Context, id, userID uuid.UUID) error
 	Delete(ctx context.Context, id, userID uuid.UUID) error
 
 	// Gestión de assets dentro de la wallet
@@ -255,8 +255,8 @@ func (h *WalletHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Sync marca la wallet como recién sincronizada con la API de la plataforma.
-// El proceso real de fetch a la plataforma se implementa en el usecase de sync.
+// Sync llama al exchange de la plataforma para importar los holdings actuales
+// y actualiza los assets de la wallet. Requiere que la wallet tenga API key/secret.
 func (h *WalletHandler) Sync(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromContext(r)
 	if err != nil {
@@ -269,8 +269,14 @@ func (h *WalletHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.uc.UpdateLastSync(r.Context(), walletID, userID); err != nil {
-		handleUsecaseErr(w, err)
+	if err := h.uc.SyncFromExchange(r.Context(), walletID, userID); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNoAPICredentials),
+			errors.Is(err, domain.ErrExchangeNotSupported):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			handleUsecaseErr(w, err)
+		}
 		return
 	}
 
