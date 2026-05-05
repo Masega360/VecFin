@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -59,6 +60,7 @@ func (u *MarketUsecase) GetAssetDetails(symbol, rangeParam string) (*domain.Asse
 	type result struct {
 		details *domain.AssetDetails
 		err     error
+		name    string
 	}
 
 	results := make([]result, len(u.providers))
@@ -68,13 +70,16 @@ func (u *MarketUsecase) GetAssetDetails(symbol, rangeParam string) (*domain.Asse
 		go func(idx int, provider domain.MarketProvider) {
 			defer wg.Done()
 			d, err := provider.GetAssetDetails(symbol, rangeParam)
-			results[idx] = result{d, err}
+			results[idx] = result{d, err, provider.Name()}
 		}(i, p)
 	}
 	wg.Wait()
 
-	// Devolver el primer resultado exitoso (Yahoo tiene prioridad por ser el primero)
 	for _, r := range results {
+		log.Printf("[market] provider=%s symbol=%s err=%v price=%v", r.name, symbol, r.err, func() float64 {
+			if r.details != nil { return r.details.Price }
+			return 0
+		}())
 		if r.err == nil && r.details != nil {
 			return r.details, nil
 		}
