@@ -103,22 +103,30 @@ type ticker24hResponse struct {
 type klinesResponse [][]interface{}
 
 func (c *Client) GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetails, error) {
-	// Binance usa pares como BTCUSDT; intentamos symbol+"USDT"
-	pair := strings.ToUpper(symbol) + "USDT"
+	base := strings.ToUpper(symbol)
 
-	// 24h ticker
-	req24, _ := http.NewRequest(http.MethodGet, baseURL+"/api/v3/ticker/24hr?symbol="+pair, nil)
-	resp24, err := c.http.Do(req24)
-	if err != nil {
-		return nil, fmt.Errorf("binance 24h: %w", err)
-	}
-	defer resp24.Body.Close()
-	if resp24.StatusCode != http.StatusOK {
-		return nil, domain.ErrAssetNotFound
-	}
-
+	// Intentar pares en orden de preferencia
+	quotes := []string{"USDT", "BUSD", "BTC", "BNB", "ETH"}
+	var pair string
 	var t24 ticker24hResponse
-	if err := json.NewDecoder(resp24.Body).Decode(&t24); err != nil {
+	for _, q := range quotes {
+		candidate := base + q
+		req24, _ := http.NewRequest(http.MethodGet, baseURL+"/api/v3/ticker/24hr?symbol="+candidate, nil)
+		resp24, err := c.http.Do(req24)
+		if err != nil {
+			continue
+		}
+		if resp24.StatusCode == http.StatusOK {
+			if err := json.NewDecoder(resp24.Body).Decode(&t24); err == nil && t24.LastPrice != "" {
+				pair = candidate
+				resp24.Body.Close()
+				break
+			}
+		}
+		resp24.Body.Close()
+	}
+
+	if pair == "" {
 		return nil, domain.ErrAssetNotFound
 	}
 

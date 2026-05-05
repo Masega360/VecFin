@@ -159,7 +159,7 @@ export default function WalletDetailScreen() {
             setSuggestions(data.slice(0, 8));
           } else {
             // Yahoo no conoce el ticker (ej: activos de Binance) → ofrecerlo directamente
-            setSuggestions([{ symbol: q, name: q, type: 'CRYPTO' }]);
+            setSuggestions([{ symbol: q, name: q, type: 'CRYPTO', source: 'manual' }]);
           }
         } else {
           setSuggestions([]);
