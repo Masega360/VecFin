@@ -70,8 +70,9 @@ func main() {
 	authHandler.RegisterRoutes()
 
 	yahooClient := yahoo.NewClient()
+	binanceMarket := binance.NewClient()
 	assetRepo := repository.NewPostgresAssetRepository(db)
-	marketUC := usecase.NewMarketUsecase(yahooClient, assetRepo)
+	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket)
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -81,12 +82,16 @@ func main() {
 	exchanges := map[string]domain.ExchangeService{
 		"binance": binance.NewClient(),
 	}
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient, platformRepo, exchanges)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
 	platformUC := usecase.NewPlatformUsecase(platformRepo)
-	platformHandler := handler.NewPlatformHandler(platformUC)
+	supportedExchanges := make(map[string]bool, len(exchanges))
+	for name := range exchanges {
+		supportedExchanges[name] = true
+	}
+	platformHandler := handler.NewPlatformHandler(platformUC, supportedExchanges)
 	platformHandler.RegisterRoutes(cfg.JWTSecret)
 
 	commRepo := repository.NewPostgresCommunityRepository(db)

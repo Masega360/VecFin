@@ -50,10 +50,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function AssetDetailScreen() {
-  const { symbol, name, from } = useLocalSearchParams<{
+  const { symbol, name, from, fallbackPrice, fallbackCurrency } = useLocalSearchParams<{
     symbol: string;
     name: string;
-    from?: string;      // tab de origen: 'assets' | 'wallets' | etc
+    from?: string;
+    fallbackPrice?: string;
+    fallbackCurrency?: string;
   }>();
   const router = useRouter();
 
@@ -85,7 +87,22 @@ export default function AssetDetailScreen() {
         setDetails(data);
         setHistory(data.history ?? []);
       } else if (res.status === 404) {
-        setPageError('Activo no encontrado');
+        // Asset no existe en Yahoo (ej: token de exchange) → usar datos del fallback
+        const price = parseFloat(fallbackPrice ?? '0') || 0;
+        const currency = fallbackCurrency ?? 'USD';
+        if (price > 0) {
+          setDetails({
+            symbol: symbol ?? '',
+            name: name ?? symbol ?? '',
+            currency,
+            price,
+            change: 0, change_pct: 0,
+            open: 0, high: 0, low: 0, volume: 0, market_cap: 0,
+            history: [],
+          });
+        } else {
+          setPageError('Activo no disponible en el mercado');
+        }
       } else {
         setPageError('No se pudo cargar el activo');
       }

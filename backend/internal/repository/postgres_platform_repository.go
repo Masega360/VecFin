@@ -14,6 +14,27 @@ func NewPostgresPlatformRepository(db *sql.DB) *postgresPlatformRepository {
 	return &postgresPlatformRepository{db: db}
 }
 
+func (r *postgresPlatformRepository) GetAll() ([]domain.Platform, error) {
+	rows, err := r.db.Query(`SELECT id, name, description FROM platform ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var platforms []domain.Platform
+	for rows.Next() {
+		var p domain.Platform
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description); err != nil {
+			return nil, err
+		}
+		platforms = append(platforms, p)
+	}
+	if platforms == nil {
+		return []domain.Platform{}, nil
+	}
+	return platforms, nil
+}
+
 func (r *postgresPlatformRepository) Search(query string) ([]domain.Platform, error) {
 	// Usamos ILIKE para que busque sin importar mayúsculas o minúsculas
 	querySQL := `SELECT id, name, description FROM platform WHERE name ILIKE '%' || $1 || '%'`
