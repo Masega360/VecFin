@@ -11,12 +11,16 @@ interface Asset {
   symbol: string;
   name: string;
   type: string;
+  source?: string;
 }
 
 interface FavAsset {
   id: number;
   asset_id: string;
   created_at: string;
+  price?: number;
+  currency?: string;
+  change_pct?: number;
 }
 
 export default function AssetsTab() {
@@ -37,10 +41,22 @@ export default function AssetsTab() {
       const res = await fetch(`${API_URL}/assets/favorites`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setFavorites(await res.json() ?? []);
-    } catch {
-      // favoritos no críticos, no bloquear la UI
-    }
+      if (!res.ok) return;
+      const favs: FavAsset[] = await res.json() ?? [];
+
+      // Cargar precios en paralelo
+      const prices = await Promise.allSettled(
+        favs.map(f =>
+          fetch(`${API_URL}/assets/${encodeURIComponent(f.asset_id)}?range=1d`)
+            .then(r => r.ok ? r.json() : null)
+        )
+      );
+
+      setFavorites(favs.map((f, i) => {
+        const d = prices[i].status === 'fulfilled' ? prices[i].value : null;
+        return { ...f, price: d?.price, currency: d?.currency, change_pct: d?.change_pct };
+      }));
+    } catch {}
   };
 
   const search = useCallback(async () => {
@@ -98,9 +114,16 @@ export default function AssetsTab() {
   const renderAsset = ({ item }: { item: Asset }) => (
     <TouchableOpacity style={styles.assetRow} onPress={() => goToDetail(item.symbol, item.name)} activeOpacity={0.7}>
       <View style={styles.assetInfo}>
-        <Text style={styles.symbol}>{item.symbol}</Text>
+        <View style={styles.rowTop}>
+          <Text style={styles.symbol}>{item.symbol}</Text>
+          {item.source && (
+            <View style={[styles.sourceBadge, item.source === 'binance' ? styles.sourceBinance : styles.sourceYahoo]}>
+              <Text style={styles.sourceBadgeText}>{item.source}</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.assetType}>{item.type}</Text>
+        {item.type ? <Text style={styles.assetType}>{item.type}</Text> : null}
       </View>
       <TouchableOpacity
         style={[styles.favBtn, isFav(item.symbol) && styles.favBtnActive]}
@@ -116,20 +139,33 @@ export default function AssetsTab() {
     </TouchableOpacity>
   );
 
-  const renderFav = ({ item }: { item: FavAsset }) => (
-    <TouchableOpacity style={styles.assetRow} onPress={() => goToDetail(item.asset_id, item.asset_id)} activeOpacity={0.7}>
-      <View style={styles.assetInfo}>
-        <Text style={styles.symbol}>{item.asset_id}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.favBtn}
-        onPress={() => removeFavorite(item.asset_id)}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <MaterialIcons name="star" size={22} color="#FFB300" />
+  const renderFav = ({ item }: { item: FavAsset }) => {
+    const positive = (item.change_pct ?? 0) >= 0;
+    return (
+      <TouchableOpacity style={styles.assetRow} onPress={() => goToDetail(item.asset_id, item.asset_id)} activeOpacity={0.7}>
+        <View style={styles.assetInfo}>
+          <Text style={styles.symbol}>{item.asset_id}</Text>
+          {item.price != null && (
+            <Text style={styles.assetName}>
+              {item.currency ?? 'USD'} {item.price.toLocaleString('es-AR', { maximumFractionDigits: 2 })}
+            </Text>
+          )}
+        </View>
+        {item.change_pct != null && (
+          <Text style={[styles.changePct, { color: positive ? '#00D26A' : '#FF4D4D' }]}>
+            {positive ? '+' : ''}{item.change_pct.toFixed(2)}%
+          </Text>
+        )}
+        <TouchableOpacity
+          style={styles.favBtn}
+          onPress={() => removeFavorite(item.asset_id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons name="star" size={22} color="#FFB300" />
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -257,9 +293,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#1e3a5a',
   },
   assetInfo:  { flex: 1 },
+  rowTop:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
   symbol:     { color: '#fff', fontWeight: '700', fontSize: 16 },
   assetName:  { color: '#8aaabf', fontSize: 13, marginTop: 2 },
   assetType:  { color: '#00ADD8', fontSize: 11, marginTop: 4, textTransform: 'uppercase', fontWeight: '600' },
+  sourceBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1 },
+  sourceYahoo:   { backgroundColor: '#0a1628', borderColor: '#1e3a5a' },
+  sourceBinance: { backgroundColor: '#1a1200', borderColor: '#F0B90B40' },
+  sourceBadgeText: { color: '#8aaabf', fontSize: 9, fontWeight: '700', textTransform: 'uppercase' },
+  changePct:  { fontSize: 13, fontWeight: '700', marginRight: 8 },
   favBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: '#0d1e30', justifyContent: 'center', alignItems: 'center',

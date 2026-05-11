@@ -15,8 +15,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/Masega360/vecfin/backend/config"
+	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
+	"github.com/Masega360/vecfin/backend/internal/platform/binance"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -68,20 +70,28 @@ func main() {
 	authHandler.RegisterRoutes()
 
 	yahooClient := yahoo.NewClient()
+	binanceMarket := binance.NewClient()
 	assetRepo := repository.NewPostgresAssetRepository(db)
-	marketUC := usecase.NewMarketUsecase(yahooClient, assetRepo)
+	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket)
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
 	walletRepo := repository.NewPostgresWalletRepository(db)
 	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient)
+	platformRepo := repository.NewPostgresPlatformRepository(db)
+	exchanges := map[string]domain.ExchangeService{
+		"binance": binance.NewClient(),
+	}
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
-	platformRepo := repository.NewPostgresPlatformRepository(db)
 	platformUC := usecase.NewPlatformUsecase(platformRepo)
-	platformHandler := handler.NewPlatformHandler(platformUC)
+	supportedExchanges := make(map[string]bool, len(exchanges))
+	for name := range exchanges {
+		supportedExchanges[name] = true
+	}
+	platformHandler := handler.NewPlatformHandler(platformUC, supportedExchanges)
 	platformHandler.RegisterRoutes(cfg.JWTSecret)
 
 	commRepo := repository.NewPostgresCommunityRepository(db)

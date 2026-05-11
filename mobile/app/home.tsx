@@ -10,6 +10,7 @@ import AssetsTab from '@/components/tabs/AssetsTab';
 import WalletsTab from '@/components/tabs/WalletsTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import CommunityTab from '@/components/tabs/CommunityTab';
+import ExchangesTab from '@/components/tabs/ExchangesTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -41,6 +42,12 @@ const TABS: TabConfig[] = [
     label: 'Wallets',
     icon: 'account-balance-wallet',
     component: WalletsTab,
+  },
+  {
+    id: 'exchanges',
+    label: 'Exchanges',
+    icon: 'swap-horiz',
+    component: ExchangesTab,
   },
   {
     id: 'community',

@@ -50,10 +50,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function AssetDetailScreen() {
-  const { symbol, name, from } = useLocalSearchParams<{
+  const { symbol, name, from, fallbackPrice, fallbackCurrency } = useLocalSearchParams<{
     symbol: string;
     name: string;
-    from?: string;      // tab de origen: 'assets' | 'wallets' | etc
+    from?: string;
+    fallbackPrice?: string;
+    fallbackCurrency?: string;
   }>();
   const router = useRouter();
 
@@ -85,7 +87,17 @@ export default function AssetDetailScreen() {
         setDetails(data);
         setHistory(data.history ?? []);
       } else if (res.status === 404) {
-        setPageError('Activo no encontrado');
+        const price = parseFloat(fallbackPrice ?? '0') || 0;
+        const currency = fallbackCurrency ?? 'USD';
+        setDetails({
+          symbol: symbol ?? '',
+          name: name ?? symbol ?? '',
+          currency,
+          price,
+          change: 0, change_pct: 0,
+          open: 0, high: 0, low: 0, volume: 0, market_cap: 0,
+          history: [],
+        });
       } else {
         setPageError('No se pudo cargar el activo');
       }
@@ -184,17 +196,21 @@ export default function AssetDetailScreen() {
       ) : details ? (
         <ScrollView contentContainerStyle={styles.scroll} scrollEventThrottle={16}>
           <View style={styles.priceRow}>
-            <Text style={styles.price}>{details.currency} {details.price.toFixed(2)}</Text>
-            <View style={[styles.changePill, { backgroundColor: positive ? '#0d2a1a' : '#2a0d0d' }]}>
-              <MaterialIcons
-                name={positive ? 'arrow-drop-up' : 'arrow-drop-down'}
-                size={20} color={positive ? '#00D26A' : '#FF4D4D'}
-              />
-              <Text style={[styles.changeText, { color: positive ? '#00D26A' : '#FF4D4D' }]}>
-                {positive ? '+' : ''}{details.change.toFixed(2)}{'  '}
-                ({positive ? '+' : ''}{details.change_pct.toFixed(2)}%)
-              </Text>
-            </View>
+            <Text style={styles.price}>
+              {details.price > 0 ? `${details.currency} ${details.price.toFixed(2)}` : 'Sin precio disponible'}
+            </Text>
+            {details.price > 0 && (
+              <View style={[styles.changePill, { backgroundColor: positive ? '#0d2a1a' : '#2a0d0d' }]}>
+                <MaterialIcons
+                  name={positive ? 'arrow-drop-up' : 'arrow-drop-down'}
+                  size={20} color={positive ? '#00D26A' : '#FF4D4D'}
+                />
+                <Text style={[styles.changeText, { color: positive ? '#00D26A' : '#FF4D4D' }]}>
+                  {positive ? '+' : ''}{details.change.toFixed(2)}{'  '}
+                  ({positive ? '+' : ''}{details.change_pct.toFixed(2)}%)
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.rangeBar}>
