@@ -14,6 +14,7 @@ type Config struct {
 	Port           string
 	JWTSecret      string
 	MigrationsPath string
+	GeminiAPIKey   string
 }
 
 func Load() *Config {
@@ -26,6 +27,7 @@ func Load() *Config {
 		Port:           os.Getenv("PORT"),
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		MigrationsPath: getEnvOrDefault("MIGRATIONS_PATH", "file://migrations"),
+		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
 	}
 }
 

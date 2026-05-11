@@ -19,6 +19,7 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/platform/binance"
+	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -103,6 +104,18 @@ func main() {
 	postUC := usecase.NewPostUsecase(postRepo, commRepo)
 	postHandler := handler.NewPostHandler(postUC)
 	postHandler.RegisterRoutes(cfg.JWTSecret)
+
+	if cfg.GeminiAPIKey != "" {
+		geminiClient, err := gemini.NewClient(cfg.GeminiAPIKey)
+		if err != nil {
+			log.Fatal("Error inicializando Gemini:", err)
+		}
+		recUC := usecase.NewRecommendationUsecase(geminiClient, userRepo, walletRepo, assetWalletRepo)
+		recHandler := handler.NewRecommendationHandler(recUC)
+		recHandler.RegisterRoutes(cfg.JWTSecret)
+	} else {
+		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoint /recommendations deshabilitado")
+	}
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
