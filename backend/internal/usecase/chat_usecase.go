@@ -70,5 +70,10 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 		return domain.ChatMessage{}, err
 	}
 
-	return uc.repo.AddMessage(ctx, sessionID, "model", reply)
+	msg, err := uc.repo.AddMessage(ctx, sessionID, "model", reply.Content)
+	if err != nil {
+		return domain.ChatMessage{}, err
+	}
+	msg.Provider = reply.Provider
+	return msg, nil
 }

@@ -52,10 +52,13 @@ Responde ÚNICAMENTE con un array JSON válido, sin texto adicional, con este fo
 	if err := json.Unmarshal([]byte(raw), &recs); err != nil {
 		return nil, fmt.Errorf("bedrock: respuesta no parseable: %w", err)
 	}
+	for i := range recs {
+		recs[i].Provider = "bedrock"
+	}
 	return recs, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string) (string, error) {
+func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string) (domain.AIResponse, error) {
 	// Construir historial como texto para el prompt
 	var sb strings.Builder
 	sb.WriteString("Eres un asistente financiero experto. Respondés en el idioma del usuario.\n\n")
@@ -68,7 +71,11 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 	}
 	fmt.Fprintf(&sb, "Usuario: %s\nAsistente:", userMessage)
 
-	return c.invoke(ctx, sb.String())
+	reply, err := c.invoke(ctx, sb.String())
+	if err != nil {
+		return domain.AIResponse{}, err
+	}
+	return domain.AIResponse{Content: reply, Provider: "bedrock"}, nil
 }
 
 // invoke llama a Bedrock con la API de Converse (compatible con todos los modelos).

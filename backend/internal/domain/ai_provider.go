@@ -20,6 +20,13 @@ type Recommendation struct {
 	Description string `json:"description"`
 	Ticker      string `json:"ticker,omitempty"`
 	Action      string `json:"action,omitempty"` // buy | sell | hold | watch
+	Provider    string `json:"provider,omitempty"`
+}
+
+// AIResponse es la respuesta de un mensaje de chat con metadata del provider.
+type AIResponse struct {
+	Content  string
+	Provider string // "gemini" | "bedrock"
 }
 
 // RecommendationCache es la fila que se persiste en DB.
@@ -43,6 +50,7 @@ type ChatMessage struct {
 	SessionID uuid.UUID `json:"session_id"`
 	Role      string    `json:"role"` // "user" | "model"
 	Content   string    `json:"content"`
+	Provider  string    `json:"provider,omitempty"` // solo en respuestas del modelo
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -52,7 +60,5 @@ type ChatMessage struct {
 // Para agregar Bedrock, OpenAI, etc. basta con implementar esta interfaz.
 type AIProvider interface {
 	GetRecommendations(ctx context.Context, input RecommendationInput) ([]Recommendation, error)
-	// SendMessage envía un mensaje dentro de una conversación multi-turn.
-	// history contiene los mensajes previos de la sesión (ordenados por created_at).
-	SendMessage(ctx context.Context, history []ChatMessage, userMessage string) (string, error)
+	SendMessage(ctx context.Context, history []ChatMessage, userMessage string) (AIResponse, error)
 }

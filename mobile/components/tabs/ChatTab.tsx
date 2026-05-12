@@ -8,7 +8,7 @@ import Markdown from 'react-native-markdown-display';
 import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
-type Message = { id: string; role: 'user' | 'model'; content: string; created_at: string };
+type Message = { id: string; role: 'user' | 'model'; content: string; provider?: string; created_at: string };
 
 export default function ChatTab() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -150,7 +150,12 @@ export default function ChatTab() {
           renderItem={({ item }) => (
             <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleModel]}>
               {item.role === 'model' ? (
-                <Markdown style={markdownStyles}>{item.content}</Markdown>
+                <>
+                  <Markdown style={markdownStyles}>{item.content}</Markdown>
+                  {item.provider && (
+                    <Text style={styles.providerLabel}>{item.provider}</Text>
+                  )}
+                </>
               ) : (
                 <Text style={styles.bubbleTextUser}>{item.content}</Text>
               )}
@@ -214,6 +219,7 @@ const styles = StyleSheet.create({
   bubbleModel: { alignSelf: 'flex-start', backgroundColor: '#0f2035', borderWidth: 1, borderColor: '#132238' },
   bubbleText: { fontSize: 14, lineHeight: 20 },
   bubbleTextUser: { color: '#fff', fontSize: 14, lineHeight: 20 },
+  providerLabel: { color: '#2a4a60', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', marginTop: 6 },
   bubbleTextModel: { color: '#e2e8f0' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: '#132238' },
   input: { flex: 1, backgroundColor: '#0f2035', color: '#e2e8f0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: '#132238' },

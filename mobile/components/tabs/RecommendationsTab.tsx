@@ -11,6 +11,7 @@ type Recommendation = {
   description: string;
   ticker?: string;
   action?: 'buy' | 'sell' | 'hold' | 'watch';
+  provider?: string;
 };
 
 const ACTION_CONFIG: Record<string, { color: string; icon: keyof typeof MaterialIcons.glyphMap }> = {
@@ -76,6 +77,11 @@ export default function RecommendationsTab() {
       <View style={styles.header}>
         <MaterialIcons name="auto-awesome" size={20} color="#00ADD8" />
         <Text style={styles.headerText}>Recomendaciones personalizadas</Text>
+        {recs.length > 0 && recs[0].provider && (
+          <View style={styles.providerBadge}>
+            <Text style={styles.providerText}>{recs[0].provider}</Text>
+          </View>
+        )}
       </View>
       <Text style={styles.subtitle}>Basadas en tu perfil de riesgo y cartera actual</Text>
 
@@ -145,4 +151,6 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 14, marginTop: 4,
   },
   refreshText: { color: '#00ADD8', fontSize: 14, fontWeight: '600' },
+  providerBadge: { marginLeft: 'auto', backgroundColor: '#132238', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  providerText: { color: '#4a6a80', fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
 });

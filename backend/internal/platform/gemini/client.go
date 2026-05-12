@@ -40,11 +40,14 @@ func (c *Client) GetRecommendations(ctx context.Context, input domain.Recommenda
 	if err := json.Unmarshal([]byte(raw), &recs); err != nil {
 		return nil, fmt.Errorf("gemini: respuesta no parseable: %w", err)
 	}
+	for i := range recs {
+		recs[i].Provider = "gemini"
+	}
 	return recs, nil
 }
 
 // SendMessage envía un mensaje en una conversación multi-turn.
-func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string) (string, error) {
+func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string) (domain.AIResponse, error) {
 	chat, err := c.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(
 			"Eres un asistente financiero experto. Ayudás al usuario con análisis de mercado, "+
@@ -53,14 +56,14 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 		),
 	}, historyToContents(history))
 	if err != nil {
-		return "", fmt.Errorf("gemini chat: %w", err)
+		return domain.AIResponse{}, fmt.Errorf("gemini chat: %w", err)
 	}
 
 	result, err := chat.SendMessage(ctx, *genai.NewPartFromText(userMessage))
 	if err != nil {
-		return "", fmt.Errorf("gemini chat: %w", err)
+		return domain.AIResponse{}, fmt.Errorf("gemini chat: %w", err)
 	}
-	return result.Text(), nil
+	return domain.AIResponse{Content: result.Text(), Provider: "gemini"}, nil
 }
 
 // historyToContents convierte el historial de dominio al formato del SDK.
