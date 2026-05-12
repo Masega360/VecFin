@@ -13,7 +13,7 @@ import (
 )
 
 // ModelID puede cambiarse a cualquier modelo de Bedrock con una línea.
-const ModelID = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+const ModelID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 type Client struct {
 	br *bedrockruntime.Client
