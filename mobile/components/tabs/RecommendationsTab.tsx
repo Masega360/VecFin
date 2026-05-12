@@ -25,14 +25,17 @@ export default function RecommendationsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRecs = useCallback(async () => {
+  const fetchRecs = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     const token = await getValidToken();
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_URL}/recommendations`, {
+      const url = forceRefresh ? `${API_URL}/recommendations/refresh` : `${API_URL}/recommendations`;
+      const method = forceRefresh ? 'PATCH' : 'GET';
+      const res = await fetch(url, {
+        method,
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
@@ -61,7 +64,7 @@ export default function RecommendationsTab() {
       <View style={styles.center}>
         <MaterialIcons name="error-outline" size={48} color="#ef4444" />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={fetchRecs}>
+        <TouchableOpacity style={styles.retryBtn} onPress={() => fetchRecs()}>
           <Text style={styles.retryText}>Reintentar</Text>
         </TouchableOpacity>
       </View>
@@ -97,7 +100,7 @@ export default function RecommendationsTab() {
         );
       })}
 
-      <TouchableOpacity style={styles.refreshBtn} onPress={fetchRecs}>
+      <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchRecs(true)}>
         <MaterialIcons name="refresh" size={18} color="#00ADD8" />
         <Text style={styles.refreshText}>Actualizar recomendaciones</Text>
       </TouchableOpacity>

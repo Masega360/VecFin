@@ -110,11 +110,17 @@ func main() {
 		if err != nil {
 			log.Fatal("Error inicializando Gemini:", err)
 		}
-		recUC := usecase.NewRecommendationUsecase(geminiClient, userRepo, walletRepo, assetWalletRepo)
+		recCacheRepo := repository.NewPostgresRecommendationRepository(db)
+		recUC := usecase.NewRecommendationUsecase(geminiClient, userRepo, walletRepo, assetWalletRepo, recCacheRepo)
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
+
+		chatRepo := repository.NewPostgresChatRepository(db)
+		chatUC := usecase.NewChatUsecase(chatRepo, geminiClient)
+		chatHandler := handler.NewChatHandler(chatUC)
+		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {
-		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoint /recommendations deshabilitado")
+		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoints de IA deshabilitados")
 	}
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +132,7 @@ func main() {
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: false,
 	})

@@ -12,6 +12,7 @@ import ProfileTab from '@/components/tabs/ProfileTab';
 import CommunityTab from '@/components/tabs/CommunityTab';
 import ExchangesTab from '@/components/tabs/ExchangesTab';
 import RecommendationsTab from '@/components/tabs/RecommendationsTab';
+import ChatTab from '@/components/tabs/ChatTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -61,6 +62,12 @@ const TABS: TabConfig[] = [
     label: 'IA',
     icon: 'auto-awesome',
     component: RecommendationsTab,
+  },
+  {
+    id: 'chat',
+    label: 'Chat IA',
+    icon: 'chat',
+    component: ChatTab,
   },
 ];
 
