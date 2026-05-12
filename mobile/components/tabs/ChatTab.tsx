@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Linking, Image,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Linking, Image, Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
@@ -114,6 +114,27 @@ export default function ChatTab() {
     }
   }, [openSession]);
 
+  const deleteSession = useCallback(async (id: string) => {
+    const token = await getValidToken();
+    if (!token) return;
+    const res = await fetch(`${API_URL}/chat/sessions/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) setSessions(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const renameSession = useCallback(async (id: string, title: string) => {
+    const token = await getValidToken();
+    if (!token) return;
+    const res = await fetch(`${API_URL}/chat/sessions/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (res.ok) setSessions(prev => prev.map(s => s.id === id ? { ...s, title } : s));
+  }, []);
+
   const sendMessage = useCallback(async () => {
     if (!input.trim() || !activeSession || sending) return;
     const text = input.trim();
@@ -166,14 +187,24 @@ export default function ChatTab() {
             data={sessions}
             keyExtractor={s => s.id}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.sessionItem} onPress={() => openSession(item)}>
-                <MaterialIcons name="chat" size={20} color="#4a6a80" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sessionTitle}>{item.title}</Text>
-                  <Text style={styles.sessionDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color="#2a4a60" />
-              </TouchableOpacity>
+              <View style={styles.sessionItem}>
+                <TouchableOpacity style={styles.sessionContent} onPress={() => openSession(item)}>
+                  <MaterialIcons name="chat" size={20} color="#4a6a80" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sessionTitle}>{item.title}</Text>
+                    <Text style={styles.sessionDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                  Alert.prompt ? Alert.prompt('Renombrar', '', (t) => { if (t) renameSession(item.id, t); }, 'plain-text', item.title)
+                    : renameSession(item.id, prompt('Nuevo nombre:', item.title) || item.title);
+                }}>
+                  <MaterialIcons name="edit" size={18} color="#4a6a80" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => deleteSession(item.id)}>
+                  <MaterialIcons name="delete-outline" size={18} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
             )}
           />
         )}
@@ -267,6 +298,7 @@ const styles = StyleSheet.create({
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   emptyText: { color: '#4a6a80', fontSize: 14 },
   sessionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: '#0f2035' },
+  sessionContent: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   sessionTitle: { color: '#e2e8f0', fontSize: 14, fontWeight: '600' },
   sessionDate: { color: '#4a6a80', fontSize: 12, marginTop: 2 },
   // Chat

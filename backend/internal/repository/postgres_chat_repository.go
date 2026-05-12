@@ -86,3 +86,14 @@ func (r *PostgresChatRepository) ListMessages(ctx context.Context, sessionID uui
 	}
 	return msgs, rows.Err()
 }
+
+
+func (r *PostgresChatRepository) DeleteSession(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM chat_sessions WHERE id = $1`, id)
+	return err
+}
+
+func (r *PostgresChatRepository) RenameSession(ctx context.Context, id uuid.UUID, title string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE chat_sessions SET title = $1 WHERE id = $2`, title, id)
+	return err
+}

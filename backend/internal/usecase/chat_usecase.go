@@ -14,6 +14,8 @@ type chatRepository interface {
 	CreateSession(ctx context.Context, userID uuid.UUID, title string) (domain.ChatSession, error)
 	ListSessions(ctx context.Context, userID uuid.UUID) ([]domain.ChatSession, error)
 	GetSession(ctx context.Context, id uuid.UUID) (domain.ChatSession, error)
+	DeleteSession(ctx context.Context, id uuid.UUID) error
+	RenameSession(ctx context.Context, id uuid.UUID, title string) error
 	AddMessage(ctx context.Context, sessionID uuid.UUID, role, content string) (domain.ChatMessage, error)
 	ListMessages(ctx context.Context, sessionID uuid.UUID) ([]domain.ChatMessage, error)
 }
@@ -69,6 +71,28 @@ func (uc *ChatUsecase) CreateSession(ctx context.Context, userID uuid.UUID, titl
 
 func (uc *ChatUsecase) ListSessions(ctx context.Context, userID uuid.UUID) ([]domain.ChatSession, error) {
 	return uc.repo.ListSessions(ctx, userID)
+}
+
+func (uc *ChatUsecase) DeleteSession(ctx context.Context, sessionID, userID uuid.UUID) error {
+	session, err := uc.repo.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session.UserID != userID {
+		return domain.ErrForbidden
+	}
+	return uc.repo.DeleteSession(ctx, sessionID)
+}
+
+func (uc *ChatUsecase) RenameSession(ctx context.Context, sessionID, userID uuid.UUID, title string) error {
+	session, err := uc.repo.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session.UserID != userID {
+		return domain.ErrForbidden
+	}
+	return uc.repo.RenameSession(ctx, sessionID, title)
 }
 
 func (uc *ChatUsecase) ListMessages(ctx context.Context, sessionID, userID uuid.UUID) ([]domain.ChatMessage, error) {
