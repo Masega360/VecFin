@@ -152,16 +152,21 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 	}
 
 	// Noticias específicas de los activos del usuario
-	sb.WriteString("\nNoticias recientes relevantes (citá título y URL cuando recomiendes):\n")
+	sb.WriteString("\nNoticias recientes relevantes (usá formato markdown [título](url) para citarlas):\n")
 	seen := map[string]bool{}
 	for _, ticker := range tickers {
-		news := uc.news.HeadlinesByQuery(ticker)
+		// Limpiar ticker: BTC-USD -> BTC, ETH-USDT -> ETH
+		query := ticker
+		if idx := strings.IndexAny(ticker, "-"); idx > 0 {
+			query = ticker[:idx]
+		}
+		news := uc.news.HeadlinesByQuery(query)
 		for _, n := range news {
 			if seen[n.Title] {
 				continue
 			}
 			seen[n.Title] = true
-			fmt.Fprintf(&sb, "- %s | Fuente: %s | URL: %s\n", n.Title, n.Source, n.URL)
+			fmt.Fprintf(&sb, "- [%s](%s) (Fuente: %s)\n", n.Title, n.URL, n.Source)
 		}
 	}
 	if len(seen) == 0 {
