@@ -10,49 +10,63 @@ import { API_URL, getValidToken } from '@/utils/api';
 type Session = { id: string; title: string; created_at: string };
 type Message = { id: string; role: 'user' | 'model'; content: string; provider?: string; created_at: string };
 
-// Extracts markdown links and raw URLs, renders them as news cards
+// Extracts markdown links and raw URLs, renders them as rich news cards
 function ChatMessageContent({ content }: { content: string }) {
-  // Match markdown links [title](url) OR raw URLs (with optional surrounding parens/quotes)
-  const combinedRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\(?(https?:\/\/[^\s)]+)\)?/g;
-  const parts: { type: 'text' | 'link'; text: string; url?: string; title?: string }[] = [];
-  let lastIndex = 0;
+  // Match markdown links [title](url) — greedy on URL to catch full paths
+  const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  // First pass: extract all links
+  const links: { title: string; url: string; start: number; end: number }[] = [];
   let match;
+  while ((match = mdLinkRegex.exec(content)) !== null) {
+    links.push({ title: match[1], url: match[2], start: match.index, end: match.index + match[0].length });
+  }
 
-  while ((match = combinedRegex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', text: content.slice(lastIndex, match.index) });
+  // Also match raw URLs not inside markdown links
+  const rawUrlRegex = /(?<!\()(https?:\/\/[^\s)<>]+)/g;
+  while ((match = rawUrlRegex.exec(content)) !== null) {
+    const overlaps = links.some(l => match!.index >= l.start && match!.index < l.end);
+    if (!overlaps) {
+      const url = match[1];
+      const title = url.split('/').pop()?.replace(/-/g, ' ').replace(/\.html$/, '').slice(0, 60) || 'Ver noticia';
+      links.push({ title, url, start: match.index, end: match.index + match[0].length });
     }
-    const url = match[2] || match[3];
-    const title = match[1] || url.replace(/https?:\/\/(finance\.)?yahoo\.com\/(.*?)\/articles\//, '').replace(/-/g, ' ').slice(0, 80);
-    parts.push({ type: 'link', text: title, title, url });
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < content.length) {
-    parts.push({ type: 'text', text: content.slice(lastIndex) });
   }
 
-  return (
-    <View>
-      {parts.map((part, i) => {
-        if (part.type === 'link' && part.url) {
-          return (
-            <TouchableOpacity
-              key={i}
-              style={styles.newsInlineCard}
-              onPress={() => Linking.openURL(part.url!)}
-            >
-              <MaterialIcons name="article" size={18} color="#00ADD8" />
-              <Text style={styles.newsInlineTitle} numberOfLines={2}>{part.title}</Text>
-              <MaterialIcons name="open-in-new" size={14} color="#4a6a80" />
-            </TouchableOpacity>
-          );
-        }
-        return part.text.trim() ? (
-          <Markdown key={i} style={markdownStyles}>{part.text}</Markdown>
-        ) : null;
-      })}
-    </View>
-  );
+  links.sort((a, b) => a.start - b.start);
+
+  if (links.length === 0) {
+    return <Markdown style={markdownStyles}>{content}</Markdown>;
+  }
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  links.forEach((link, i) => {
+    if (link.start > lastIndex) {
+      const text = content.slice(lastIndex, link.start).trim();
+      if (text) parts.push(<Markdown key={`t${i}`} style={markdownStyles}>{text}</Markdown>);
+    }
+    parts.push(
+      <TouchableOpacity key={`l${i}`} style={styles.newsInlineCard} onPress={() => Linking.openURL(link.url)}>
+        <View style={styles.newsIconBg}>
+          <MaterialIcons name="newspaper" size={20} color="#00ADD8" />
+        </View>
+        <View style={styles.newsInlineBody}>
+          <Text style={styles.newsInlineTitle} numberOfLines={2}>{link.title}</Text>
+          <Text style={styles.newsInlineSource} numberOfLines={1}>
+            {link.url.match(/\/\/([^/]+)/)?.[1]?.replace('www.', '') || ''}
+          </Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={18} color="#4a6a80" />
+      </TouchableOpacity>
+    );
+    lastIndex = link.end;
+  });
+  if (lastIndex < content.length) {
+    const text = content.slice(lastIndex).trim();
+    if (text) parts.push(<Markdown key="end" style={markdownStyles}>{text}</Markdown>);
+  }
+
+  return <View>{parts}</View>;
 }
 
 export default function ChatTab() {
@@ -269,6 +283,9 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: '#132238' },
   input: { flex: 1, backgroundColor: '#0f2035', color: '#e2e8f0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: '#132238' },
   sendBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  newsInlineCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0a1628', borderRadius: 10, padding: 10, marginVertical: 6, gap: 8, borderWidth: 1, borderColor: '#132238' },
-  newsInlineTitle: { flex: 1, color: '#e2e8f0', fontSize: 12, fontWeight: '600' },
+  newsInlineCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0a1628', borderRadius: 12, padding: 12, marginVertical: 6, gap: 10, borderWidth: 1, borderColor: '#1e3a5a' },
+  newsIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#132238', justifyContent: 'center', alignItems: 'center' },
+  newsInlineBody: { flex: 1, gap: 2 },
+  newsInlineTitle: { color: '#e2e8f0', fontSize: 13, fontWeight: '600', lineHeight: 17 },
+  newsInlineSource: { color: '#00ADD8', fontSize: 10, fontWeight: '500' },
 });
