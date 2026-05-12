@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Linking, Image, Alert,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Linking, Image, Alert, Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
@@ -51,12 +51,14 @@ function ChatMessageContent({ content }: { content: string }) {
                   const min = Math.min(...closes);
                   const max = Math.max(...closes);
                   const range = max - min || 1;
-                  const w = 250, h = 40;
+                  // bubble 95% - padding(12*2) - card padding(14*2)
+                  const sparkW = Dimensions.get('window').width * 0.95 - 24 - 28 - 16;
+                  const h = 50;
                   const pts = closes.map((c: number, idx: number) =>
-                    `${(idx / (closes.length - 1)) * w},${h - ((c - min) / range) * (h - 4) - 2}`
+                    `${(idx / (closes.length - 1)) * sparkW},${h - ((c - min) / range) * (h - 4) - 2}`
                   ).join(' ');
                   return (
-                    <Svg width={w} height={h} style={{ marginVertical: 4, alignSelf: 'center' }}>
+                    <Svg width={sparkW} height={h} style={{ marginVertical: 6 }}>
                       <Polyline points={pts} fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="2" />
                     </Svg>
                   );
