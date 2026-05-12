@@ -267,7 +267,7 @@ func (t *chatToolExec) GetAssetPrice(symbol string) string {
 		"low":        details.Low,
 		"volume":     details.Volume,
 	})
-	return string(data)
+	return "Incluí este bloque exacto en tu respuesta para mostrar el asset inline:\n```asset\n" + string(data) + "\n```"
 }
 
 func (t *chatToolExec) SearchAssets(query string) string {

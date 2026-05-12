@@ -10,20 +10,66 @@ import { API_URL, getValidToken } from '@/utils/api';
 type Session = { id: string; title: string; created_at: string };
 type Message = { id: string; role: 'user' | 'model'; content: string; provider?: string; created_at: string };
 
-// Extracts markdown links and raw URLs, renders them as rich news cards
+// Extracts markdown links, raw URLs, and asset blocks, renders them richly
 function ChatMessageContent({ content }: { content: string }) {
-  // Match markdown links [title](url) — greedy on URL to catch full paths
+  // Split by asset code blocks first
+  const assetBlockRegex = /```asset\s*\n?([\s\S]*?)\n?```/g;
+  const segments: { type: 'text' | 'asset'; data: string }[] = [];
+  let lastIdx = 0;
+  let m;
+  while ((m = assetBlockRegex.exec(content)) !== null) {
+    if (m.index > lastIdx) segments.push({ type: 'text', data: content.slice(lastIdx, m.index) });
+    segments.push({ type: 'asset', data: m[1] });
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < content.length) segments.push({ type: 'text', data: content.slice(lastIdx) });
+
+  return (
+    <View>
+      {segments.map((seg, i) => {
+        if (seg.type === 'asset') {
+          try {
+            const a = JSON.parse(seg.data);
+            const positive = (a.change || 0) >= 0;
+            return (
+              <View key={i} style={styles.assetInlineCard}>
+                <View style={styles.assetInlineHeader}>
+                  <Text style={styles.assetInlineSymbol}>{a.symbol}</Text>
+                  <Text style={styles.assetInlineName}>{a.name}</Text>
+                </View>
+                <View style={styles.assetInlineRow}>
+                  <Text style={styles.assetInlinePrice}>{a.currency} {a.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                  <View style={[styles.assetInlinePill, { backgroundColor: positive ? '#0d2a1a' : '#2a0d0d' }]}>
+                    <Text style={{ color: positive ? '#00D26A' : '#FF4D4D', fontSize: 11, fontWeight: '700' }}>
+                      {positive ? '+' : ''}{a.change_pct?.toFixed(2)}%
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.assetInlineStats}>
+                  <Text style={styles.assetInlineStat}>H: {a.high?.toFixed(2)}</Text>
+                  <Text style={styles.assetInlineStat}>L: {a.low?.toFixed(2)}</Text>
+                  <Text style={styles.assetInlineStat}>Vol: {a.volume > 1e9 ? (a.volume/1e9).toFixed(1)+'B' : a.volume > 1e6 ? (a.volume/1e6).toFixed(1)+'M' : a.volume}</Text>
+                </View>
+              </View>
+            );
+          } catch { return null; }
+        }
+        return <TextSegmentWithLinks key={i} text={seg.data} />;
+      })}
+    </View>
+  );
+}
+
+// Renders text with inline news link cards
+function TextSegmentWithLinks({ text }: { text: string }) {
   const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-  // First pass: extract all links
   const links: { title: string; url: string; start: number; end: number }[] = [];
   let match;
-  while ((match = mdLinkRegex.exec(content)) !== null) {
+  while ((match = mdLinkRegex.exec(text)) !== null) {
     links.push({ title: match[1], url: match[2], start: match.index, end: match.index + match[0].length });
   }
-
-  // Also match raw URLs not inside markdown links
   const rawUrlRegex = /(?<!\()(https?:\/\/[^\s)<>]+)/g;
-  while ((match = rawUrlRegex.exec(content)) !== null) {
+  while ((match = rawUrlRegex.exec(text)) !== null) {
     const overlaps = links.some(l => match!.index >= l.start && match!.index < l.end);
     if (!overlaps) {
       const url = match[1];
@@ -31,19 +77,18 @@ function ChatMessageContent({ content }: { content: string }) {
       links.push({ title, url, start: match.index, end: match.index + match[0].length });
     }
   }
-
   links.sort((a, b) => a.start - b.start);
 
   if (links.length === 0) {
-    return <Markdown style={markdownStyles}>{content}</Markdown>;
+    return text.trim() ? <Markdown style={markdownStyles}>{text}</Markdown> : null;
   }
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   links.forEach((link, i) => {
     if (link.start > lastIndex) {
-      const text = content.slice(lastIndex, link.start).trim();
-      if (text) parts.push(<Markdown key={`t${i}`} style={markdownStyles}>{text}</Markdown>);
+      const t = text.slice(lastIndex, link.start).trim();
+      if (t) parts.push(<Markdown key={`t${i}`} style={markdownStyles}>{t}</Markdown>);
     }
     parts.push(
       <TouchableOpacity key={`l${i}`} style={styles.newsInlineCard} onPress={() => Linking.openURL(link.url)}>
@@ -61,11 +106,10 @@ function ChatMessageContent({ content }: { content: string }) {
     );
     lastIndex = link.end;
   });
-  if (lastIndex < content.length) {
-    const text = content.slice(lastIndex).trim();
-    if (text) parts.push(<Markdown key="end" style={markdownStyles}>{text}</Markdown>);
+  if (lastIndex < text.length) {
+    const t = text.slice(lastIndex).trim();
+    if (t) parts.push(<Markdown key="end" style={markdownStyles}>{t}</Markdown>);
   }
-
   return <View>{parts}</View>;
 }
 
@@ -320,4 +364,13 @@ const styles = StyleSheet.create({
   newsInlineBody: { flex: 1, gap: 2 },
   newsInlineTitle: { color: '#e2e8f0', fontSize: 13, fontWeight: '600', lineHeight: 17 },
   newsInlineSource: { color: '#00ADD8', fontSize: 10, fontWeight: '500' },
+  assetInlineCard: { backgroundColor: '#0a1628', borderRadius: 14, padding: 14, marginVertical: 8, borderWidth: 1, borderColor: '#1e3a5a' },
+  assetInlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  assetInlineSymbol: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  assetInlineName: { color: '#8aaabf', fontSize: 12 },
+  assetInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  assetInlinePrice: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  assetInlinePill: { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+  assetInlineStats: { flexDirection: 'row', gap: 12 },
+  assetInlineStat: { color: '#4a6a80', fontSize: 11 },
 });
