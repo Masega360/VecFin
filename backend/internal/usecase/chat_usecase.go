@@ -35,6 +35,7 @@ type chatMarketService interface {
 
 type chatNewsProvider interface {
 	HotTopics() []string
+	HeadlinesByQuery(query string) []domain.News
 }
 
 type ChatUsecase struct {
@@ -122,6 +123,7 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 	}
 
 	var totalUSD float64
+	var tickers []string
 	sb.WriteString("Wallets y activos:\n")
 	for _, w := range wallets {
 		assets, err := uc.assetWallet.ListByWallet(ctx, w.ID)
@@ -131,6 +133,7 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 		fmt.Fprintf(&sb, "- %s: ", w.Name)
 		items := make([]string, 0, len(assets))
 		for _, a := range assets {
+			tickers = append(tickers, a.Ticker)
 			if uc.market != nil {
 				if details, derr := uc.market.GetAssetDetails(a.Ticker, "1d"); derr == nil && details != nil {
 					val := a.Quantity * details.Price
@@ -147,8 +150,26 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 	if totalUSD > 0 {
 		fmt.Fprintf(&sb, "Valor total estimado: $%.2f USD\n", totalUSD)
 	}
-	if topics := uc.news.HotTopics(); len(topics) > 0 {
-		sb.WriteString("Noticias financieras recientes: " + strings.Join(topics, " | ") + "\n")
+
+	// Noticias específicas de los activos del usuario
+	sb.WriteString("\nNoticias recientes relevantes (citá título y URL cuando recomiendes):\n")
+	seen := map[string]bool{}
+	for _, ticker := range tickers {
+		news := uc.news.HeadlinesByQuery(ticker)
+		for _, n := range news {
+			if seen[n.Title] {
+				continue
+			}
+			seen[n.Title] = true
+			fmt.Fprintf(&sb, "- %s | Fuente: %s | URL: %s\n", n.Title, n.Source, n.URL)
+		}
+	}
+	if len(seen) == 0 {
+		if topics := uc.news.HotTopics(); len(topics) > 0 {
+			for _, t := range topics {
+				sb.WriteString("- " + t + "\n")
+			}
+		}
 	}
 	return sb.String()
 }

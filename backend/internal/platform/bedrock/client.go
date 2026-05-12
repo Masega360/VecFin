@@ -62,9 +62,10 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 	// Construir historial como texto para el prompt
 	var sb strings.Builder
 	sb.WriteString("Eres un asistente financiero integrado en la plataforma VecFin. " +
-		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos). " +
-		"Usá esa información para responder sus consultas de forma directa y concreta. " +
-		"Respondés en el idioma del usuario, de forma breve y útil.\n")
+		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos) y a noticias recientes del mercado. " +
+		"Cuando des recomendaciones, citá las noticias relevantes incluyendo su título y URL. " +
+		"Podés citar múltiples noticias en una misma respuesta. " +
+		"Respondés en el idioma del usuario, de forma útil y concreta.\n")
 	if systemContext != "" {
 		sb.WriteString("\nDatos del usuario en la plataforma:\n")
 		sb.WriteString(systemContext)

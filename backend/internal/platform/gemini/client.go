@@ -49,9 +49,10 @@ func (c *Client) GetRecommendations(ctx context.Context, input domain.Recommenda
 // SendMessage envía un mensaje en una conversación multi-turn.
 func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string) (domain.AIResponse, error) {
 	sysInstruction := "Eres un asistente financiero integrado en la plataforma VecFin. " +
-		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos). " +
-		"Usá esa información para responder sus consultas de forma directa y concreta. " +
-		"Respondés en el idioma del usuario, de forma breve y útil."
+		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos) y a noticias recientes del mercado. " +
+		"Cuando des recomendaciones, citá las noticias relevantes incluyendo su título y URL. " +
+		"Podés citar múltiples noticias en una misma respuesta. " +
+		"Respondés en el idioma del usuario, de forma útil y concreta."
 	if systemContext != "" {
 		sysInstruction += "\n\nDatos del usuario en la plataforma:\n" + systemContext
 	}
