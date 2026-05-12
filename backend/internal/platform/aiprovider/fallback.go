@@ -26,11 +26,11 @@ func (f *Fallback) GetRecommendations(ctx context.Context, input domain.Recommen
 	return recs, nil
 }
 
-func (f *Fallback) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string) (domain.AIResponse, error) {
-	reply, err := f.Primary.SendMessage(ctx, history, userMessage, systemContext)
+func (f *Fallback) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string, tools domain.ChatToolExecutor) (domain.AIResponse, error) {
+	reply, err := f.Primary.SendMessage(ctx, history, userMessage, systemContext, tools)
 	if err != nil {
 		log.Printf("[ai] primary failed (%v), falling back to secondary", err)
-		reply, err = f.Secondary.SendMessage(ctx, history, userMessage, systemContext)
+		reply, err = f.Secondary.SendMessage(ctx, history, userMessage, systemContext, tools)
 		if err != nil {
 			log.Printf("[ai] secondary also failed: %v", err)
 		}

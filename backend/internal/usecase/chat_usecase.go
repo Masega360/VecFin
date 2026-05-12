@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -31,6 +32,7 @@ type chatAssetWalletRepository interface {
 
 type chatMarketService interface {
 	GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetails, error)
+	SearchAssets(query string) ([]domain.Asset, error)
 }
 
 type chatNewsProvider interface {
@@ -95,7 +97,8 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 
 	sysCtx := uc.buildUserContext(ctx, userID)
 
-	reply, err := uc.ai.SendMessage(ctx, history, content, sysCtx)
+	toolExec := &chatToolExec{market: uc.market, news: uc.news}
+	reply, err := uc.ai.SendMessage(ctx, history, content, sysCtx, toolExec)
 	if err != nil {
 		return domain.ChatMessage{}, err
 	}
@@ -175,6 +178,57 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 				sb.WriteString("- " + t + "\n")
 			}
 		}
+	}
+	return sb.String()
+}
+
+
+// ─── ChatToolExecutor implementation ──────────────────────────────────────────
+
+type chatToolExec struct {
+	market chatMarketService
+	news   chatNewsProvider
+}
+
+func (t *chatToolExec) SearchNews(query string) string {
+	news := t.news.HeadlinesByQuery(query)
+	if len(news) == 0 {
+		return "No se encontraron noticias para: " + query
+	}
+	var sb strings.Builder
+	for _, n := range news {
+		fmt.Fprintf(&sb, "- [%s](%s) (Fuente: %s)\n", n.Title, n.URL, n.Source)
+	}
+	return sb.String()
+}
+
+func (t *chatToolExec) GetAssetPrice(symbol string) string {
+	details, err := t.market.GetAssetDetails(symbol, "1d")
+	if err != nil || details == nil {
+		return "No se encontró precio para: " + symbol
+	}
+	data, _ := json.Marshal(map[string]any{
+		"symbol":     details.Symbol,
+		"name":       details.Name,
+		"price":      details.Price,
+		"currency":   details.Currency,
+		"change":     details.Change,
+		"change_pct": details.ChangePct,
+		"high":       details.High,
+		"low":        details.Low,
+		"volume":     details.Volume,
+	})
+	return string(data)
+}
+
+func (t *chatToolExec) SearchAssets(query string) string {
+	assets, err := t.market.SearchAssets(query)
+	if err != nil || len(assets) == 0 {
+		return "No se encontraron activos para: " + query
+	}
+	var sb strings.Builder
+	for _, a := range assets {
+		fmt.Fprintf(&sb, "- %s (%s) [%s]\n", a.Symbol, a.Name, a.Type)
 	}
 	return sb.String()
 }

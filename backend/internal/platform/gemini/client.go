@@ -47,19 +47,61 @@ func (c *Client) GetRecommendations(ctx context.Context, input domain.Recommenda
 }
 
 // SendMessage envía un mensaje en una conversación multi-turn.
-func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string) (domain.AIResponse, error) {
+// chatTools defines the function declarations for the AI.
+var chatTools = []*genai.Tool{{
+	FunctionDeclarations: []*genai.FunctionDeclaration{
+		{
+			Name:        "search_news",
+			Description: "Busca noticias financieras recientes sobre un tema, ticker o activo. Devuelve títulos y URLs.",
+			Parameters: &genai.Schema{
+				Type: "OBJECT",
+				Properties: map[string]*genai.Schema{
+					"query": {Type: "STRING", Description: "Tema o ticker a buscar (ej: Bitcoin, AAPL, inflación)"},
+				},
+				Required: []string{"query"},
+			},
+		},
+		{
+			Name:        "get_asset_price",
+			Description: "Obtiene el precio actual y datos de mercado de un activo financiero.",
+			Parameters: &genai.Schema{
+				Type: "OBJECT",
+				Properties: map[string]*genai.Schema{
+					"symbol": {Type: "STRING", Description: "Símbolo del activo (ej: BTC-USD, AAPL, ETH-USD)"},
+				},
+				Required: []string{"symbol"},
+			},
+		},
+		{
+			Name:        "search_assets",
+			Description: "Busca activos financieros por nombre o símbolo. Útil para encontrar el símbolo correcto.",
+			Parameters: &genai.Schema{
+				Type: "OBJECT",
+				Properties: map[string]*genai.Schema{
+					"query": {Type: "STRING", Description: "Nombre o símbolo parcial del activo (ej: Tesla, Bitcoin, oro)"},
+				},
+				Required: []string{"query"},
+			},
+		},
+	},
+}}
+
+func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string, tools domain.ChatToolExecutor) (domain.AIResponse, error) {
 	sysInstruction := "Eres un asistente financiero integrado en la plataforma VecFin. " +
-		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos) y a noticias recientes del mercado. " +
-		"Cuando cites noticias, usá formato markdown: [título de la noticia](url). " +
-		"Podés citar múltiples noticias en una misma respuesta. " +
+		"Tenés acceso a los datos del usuario y podés buscar noticias, precios y activos en tiempo real usando tus herramientas. " +
+		"Cuando cites noticias, usá formato markdown: [título](url). " +
+		"Usá las herramientas siempre que necesites datos actualizados. " +
 		"Respondés en el idioma del usuario, de forma útil y concreta."
 	if systemContext != "" {
 		sysInstruction += "\n\nDatos del usuario en la plataforma:\n" + systemContext
 	}
 
-	chat, err := c.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
+	config := &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(sysInstruction, "user"),
-	}, historyToContents(history))
+		Tools:             chatTools,
+	}
+
+	chat, err := c.client.Chats.Create(ctx, model, config, historyToContents(history))
 	if err != nil {
 		return domain.AIResponse{}, fmt.Errorf("gemini chat: %w", err)
 	}
@@ -68,6 +110,49 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 	if err != nil {
 		return domain.AIResponse{}, fmt.Errorf("gemini chat: %w", err)
 	}
+
+	// Tool use loop (max 5 iterations)
+	for i := 0; i < 5; i++ {
+		if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+			break
+		}
+
+		var functionResponses []genai.Part
+		for _, part := range result.Candidates[0].Content.Parts {
+			if part.FunctionCall == nil {
+				continue
+			}
+			fc := part.FunctionCall
+			var output string
+			switch fc.Name {
+			case "search_news":
+				q, _ := fc.Args["query"].(string)
+				output = tools.SearchNews(q)
+			case "get_asset_price":
+				s, _ := fc.Args["symbol"].(string)
+				output = tools.GetAssetPrice(s)
+			case "search_assets":
+				q, _ := fc.Args["query"].(string)
+				output = tools.SearchAssets(q)
+			}
+			functionResponses = append(functionResponses, genai.Part{
+				FunctionResponse: &genai.FunctionResponse{
+					Name:     fc.Name,
+					Response: map[string]any{"result": output},
+				},
+			})
+		}
+
+		if len(functionResponses) == 0 {
+			break
+		}
+
+		result, err = chat.SendMessage(ctx, functionResponses...)
+		if err != nil {
+			return domain.AIResponse{}, fmt.Errorf("gemini tool response: %w", err)
+		}
+	}
+
 	return domain.AIResponse{Content: result.Text(), Provider: "gemini"}, nil
 }
 

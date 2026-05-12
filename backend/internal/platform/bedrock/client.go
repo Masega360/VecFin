@@ -58,34 +58,140 @@ Responde ÚNICAMENTE con un array JSON válido, sin texto adicional, con este fo
 	return recs, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string) (domain.AIResponse, error) {
-	// Construir historial como texto para el prompt
-	var sb strings.Builder
-	sb.WriteString("Eres un asistente financiero integrado en la plataforma VecFin. " +
-		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos) y a noticias recientes del mercado. " +
-		"Cuando cites noticias, usá formato markdown: [título de la noticia](url). " +
-		"Podés citar múltiples noticias en una misma respuesta. " +
-		"Respondés en el idioma del usuario, de forma útil y concreta.\n")
+func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string, tools domain.ChatToolExecutor) (domain.AIResponse, error) {
+	sysInstruction := "Eres un asistente financiero integrado en la plataforma VecFin. " +
+		"Tenés acceso a los datos del usuario y podés buscar noticias, precios y activos en tiempo real usando tus herramientas. " +
+		"Cuando cites noticias, usá formato markdown: [título](url). " +
+		"Usá las herramientas siempre que necesites datos actualizados. " +
+		"Respondés en el idioma del usuario, de forma útil y concreta."
 	if systemContext != "" {
-		sb.WriteString("\nDatos del usuario en la plataforma:\n")
-		sb.WriteString(systemContext)
-		sb.WriteString("\n")
+		sysInstruction += "\n\nDatos del usuario en la plataforma:\n" + systemContext
 	}
-	sb.WriteString("\n")
-	for _, m := range history {
-		role := "Usuario"
-		if m.Role == "model" {
-			role = "Asistente"
-		}
-		fmt.Fprintf(&sb, "%s: %s\n", role, m.Content)
-	}
-	fmt.Fprintf(&sb, "Usuario: %s\nAsistente:", userMessage)
 
-	reply, err := c.invoke(ctx, sb.String())
-	if err != nil {
-		return domain.AIResponse{}, err
+	// Build messages
+	messages := make([]map[string]any, 0, len(history)+1)
+	for _, m := range history {
+		role := "user"
+		if m.Role == "model" {
+			role = "assistant"
+		}
+		messages = append(messages, map[string]any{"role": role, "content": m.Content})
 	}
-	return domain.AIResponse{Content: reply, Provider: "bedrock"}, nil
+	messages = append(messages, map[string]any{"role": "user", "content": userMessage})
+
+	toolDefs := []map[string]any{
+		{
+			"name":        "search_news",
+			"description": "Busca noticias financieras recientes sobre un tema, ticker o activo.",
+			"input_schema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"query": map[string]any{"type": "string", "description": "Tema o ticker a buscar"}},
+				"required":   []string{"query"},
+			},
+		},
+		{
+			"name":        "get_asset_price",
+			"description": "Obtiene el precio actual y datos de mercado de un activo financiero.",
+			"input_schema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"symbol": map[string]any{"type": "string", "description": "Símbolo del activo (ej: BTC-USD, AAPL)"}},
+				"required":   []string{"symbol"},
+			},
+		},
+		{
+			"name":        "search_assets",
+			"description": "Busca activos financieros por nombre o símbolo.",
+			"input_schema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"query": map[string]any{"type": "string", "description": "Nombre o símbolo parcial del activo"}},
+				"required":   []string{"query"},
+			},
+		},
+	}
+
+	// Tool use loop
+	for i := 0; i < 5; i++ {
+		body, _ := json.Marshal(map[string]any{
+			"anthropic_version": "bedrock-2023-05-31",
+			"max_tokens":        2048,
+			"system":            sysInstruction,
+			"messages":          messages,
+			"tools":             toolDefs,
+		})
+
+		out, err := c.br.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
+			ModelId:     ptr(ModelID),
+			ContentType: ptr("application/json"),
+			Body:        body,
+		})
+		if err != nil {
+			return domain.AIResponse{}, fmt.Errorf("bedrock: %w", err)
+		}
+
+		var resp struct {
+			Content  []json.RawMessage `json:"content"`
+			StopReason string          `json:"stop_reason"`
+		}
+		if err := json.Unmarshal(out.Body, &resp); err != nil {
+			return domain.AIResponse{}, fmt.Errorf("bedrock parse: %w", err)
+		}
+
+		// Check if we need to handle tool use
+		if resp.StopReason != "tool_use" {
+			// Extract text from content blocks
+			var text strings.Builder
+			for _, block := range resp.Content {
+				var b struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				}
+				json.Unmarshal(block, &b)
+				if b.Type == "text" {
+					text.WriteString(b.Text)
+				}
+			}
+			return domain.AIResponse{Content: text.String(), Provider: "bedrock"}, nil
+		}
+
+		// Process tool calls
+		// Add assistant message with tool_use blocks
+		messages = append(messages, map[string]any{"role": "assistant", "content": resp.Content})
+
+		var toolResults []map[string]any
+		for _, block := range resp.Content {
+			var tc struct {
+				Type  string         `json:"type"`
+				ID    string         `json:"id"`
+				Name  string         `json:"name"`
+				Input map[string]any `json:"input"`
+			}
+			json.Unmarshal(block, &tc)
+			if tc.Type != "tool_use" {
+				continue
+			}
+
+			var output string
+			switch tc.Name {
+			case "search_news":
+				q, _ := tc.Input["query"].(string)
+				output = tools.SearchNews(q)
+			case "get_asset_price":
+				s, _ := tc.Input["symbol"].(string)
+				output = tools.GetAssetPrice(s)
+			case "search_assets":
+				q, _ := tc.Input["query"].(string)
+				output = tools.SearchAssets(q)
+			}
+			toolResults = append(toolResults, map[string]any{
+				"type":        "tool_result",
+				"tool_use_id": tc.ID,
+				"content":     output,
+			})
+		}
+		messages = append(messages, map[string]any{"role": "user", "content": toolResults})
+	}
+
+	return domain.AIResponse{Content: "Error: demasiadas llamadas a herramientas", Provider: "bedrock"}, nil
 }
 
 // invoke llama a Bedrock con la API de Converse (compatible con todos los modelos).
