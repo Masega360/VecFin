@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Linking, Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
@@ -9,6 +9,49 @@ import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
 type Message = { id: string; role: 'user' | 'model'; content: string; provider?: string; created_at: string };
+
+// Extracts markdown links and renders them as news cards
+function ChatMessageContent({ content }: { content: string }) {
+  // Split content into text segments and link segments
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const parts: { type: 'text' | 'link'; text: string; url?: string; title?: string }[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = linkRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', text: content.slice(lastIndex, match.index) });
+    }
+    parts.push({ type: 'link', text: match[1], title: match[1], url: match[2] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: 'text', text: content.slice(lastIndex) });
+  }
+
+  return (
+    <View>
+      {parts.map((part, i) => {
+        if (part.type === 'link' && part.url) {
+          return (
+            <TouchableOpacity
+              key={i}
+              style={styles.newsInlineCard}
+              onPress={() => Linking.openURL(part.url!)}
+            >
+              <MaterialIcons name="article" size={18} color="#00ADD8" />
+              <Text style={styles.newsInlineTitle} numberOfLines={2}>{part.title}</Text>
+              <MaterialIcons name="open-in-new" size={14} color="#4a6a80" />
+            </TouchableOpacity>
+          );
+        }
+        return part.text.trim() ? (
+          <Markdown key={i} style={markdownStyles}>{part.text}</Markdown>
+        ) : null;
+      })}
+    </View>
+  );
+}
 
 export default function ChatTab() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -151,7 +194,7 @@ export default function ChatTab() {
             <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleModel]}>
               {item.role === 'model' ? (
                 <>
-                  <Markdown style={markdownStyles}>{item.content}</Markdown>
+                  <ChatMessageContent content={item.content} />
                   {item.provider && (
                     <Text style={styles.providerLabel}>{item.provider}</Text>
                   )}
@@ -224,4 +267,6 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: '#132238' },
   input: { flex: 1, backgroundColor: '#0f2035', color: '#e2e8f0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: '#132238' },
   sendBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  newsInlineCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0a1628', borderRadius: 10, padding: 10, marginVertical: 6, gap: 8, borderWidth: 1, borderColor: '#132238' },
+  newsInlineTitle: { flex: 1, color: '#e2e8f0', fontSize: 12, fontWeight: '600' },
 });
