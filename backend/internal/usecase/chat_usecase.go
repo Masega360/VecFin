@@ -125,6 +125,15 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 		return domain.ChatMessage{}, err
 	}
 
+	// Auto-rename on first message
+	if len(history) == 0 && session.Title == "Nueva conversación" {
+		title := content
+		if len(title) > 40 {
+			title = title[:40] + "..."
+		}
+		_ = uc.repo.RenameSession(ctx, sessionID, title)
+	}
+
 	if _, err := uc.repo.AddMessage(ctx, sessionID, "user", content); err != nil {
 		return domain.ChatMessage{}, err
 	}
