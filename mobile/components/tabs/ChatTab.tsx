@@ -51,16 +51,14 @@ function ChatMessageContent({ content }: { content: string }) {
                   const min = Math.min(...closes);
                   const max = Math.max(...closes);
                   const range = max - min || 1;
-                  const h = 40;
-                  const points = closes.map((c: number, idx: number) =>
-                    `${(idx / (closes.length - 1)) * 100}%,${h - ((c - min) / range) * h}`
+                  const w = closes.length - 1;
+                  const h = 30;
+                  const pts = closes.map((c: number, idx: number) =>
+                    `${idx},${h - ((c - min) / range) * h}`
                   ).join(' ');
                   return (
-                    <Svg width="100%" height={h} style={{ marginVertical: 4 }} viewBox={`0 0 ${closes.length - 1} ${h}`} preserveAspectRatio="none">
-                      <Polyline
-                        points={closes.map((c: number, idx: number) => `${idx},${h - ((c - min) / range) * h}`).join(' ')}
-                        fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="1.5"
-                      />
+                    <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} style={{ marginVertical: 4 }}>
+                      <Polyline points={pts} fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="0.5" />
                     </Svg>
                   );
                 })()}
