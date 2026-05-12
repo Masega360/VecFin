@@ -10,11 +10,8 @@ import (
 
 const recommendationTTL = time.Hour
 
-// hotTopics son temas de mercado hardcodeados por ahora.
-// En el futuro se reemplazarán por un feed de noticias real (domain.News).
-var hotTopics = []string{
-	"Bitcoin ETF", "inteligencia artificial", "tasas de la Fed",
-	"oro como refugio", "acciones tecnológicas",
+type newsProvider interface {
+	HotTopics() []string
 }
 
 type recUserRepository interface {
@@ -40,6 +37,7 @@ type RecommendationUsecase struct {
 	wallets     recWalletRepository
 	assetWallet recAssetWalletRepository
 	cache       recCacheRepository
+	news        newsProvider
 }
 
 func NewRecommendationUsecase(
@@ -48,8 +46,9 @@ func NewRecommendationUsecase(
 	wallets recWalletRepository,
 	assetWallet recAssetWalletRepository,
 	cache recCacheRepository,
+	news newsProvider,
 ) *RecommendationUsecase {
-	return &RecommendationUsecase{ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, cache: cache}
+	return &RecommendationUsecase{ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, cache: cache, news: news}
 }
 
 // Get devuelve recomendaciones desde cache si tienen menos de 1h, si no las regenera.
@@ -98,7 +97,7 @@ func (uc *RecommendationUsecase) refresh(ctx context.Context, userID uuid.UUID) 
 	recs, err := uc.ai.GetRecommendations(ctx, domain.RecommendationInput{
 		RiskType:  user.RiskType,
 		Holdings:  holdings,
-		HotTopics: hotTopics,
+		HotTopics: uc.news.HotTopics(),
 	})
 	if err != nil {
 		return nil, err

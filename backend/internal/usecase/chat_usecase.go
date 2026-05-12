@@ -33,6 +33,10 @@ type chatMarketService interface {
 	GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetails, error)
 }
 
+type chatNewsProvider interface {
+	HotTopics() []string
+}
+
 type ChatUsecase struct {
 	repo        chatRepository
 	ai          domain.AIProvider
@@ -40,10 +44,11 @@ type ChatUsecase struct {
 	wallets     chatWalletRepository
 	assetWallet chatAssetWalletRepository
 	market      chatMarketService
+	news        chatNewsProvider
 }
 
-func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService) *ChatUsecase {
-	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market}
+func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService, news chatNewsProvider) *ChatUsecase {
+	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market, news: news}
 }
 
 func (uc *ChatUsecase) CreateSession(ctx context.Context, userID uuid.UUID, title string) (domain.ChatSession, error) {
@@ -142,6 +147,8 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 	if totalUSD > 0 {
 		fmt.Fprintf(&sb, "Valor total estimado: $%.2f USD\n", totalUSD)
 	}
-	sb.WriteString("Temas calientes del mercado: " + strings.Join(hotTopics, ", ") + "\n")
+	if topics := uc.news.HotTopics(); len(topics) > 0 {
+		sb.WriteString("Noticias financieras recientes: " + strings.Join(topics, " | ") + "\n")
+	}
 	return sb.String()
 }
