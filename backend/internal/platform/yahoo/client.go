@@ -84,17 +84,17 @@ type yahooChartResponse struct {
 	Chart struct {
 		Result []struct {
 			Meta struct {
-				Symbol                string  `json:"symbol"`
-				ShortName             string  `json:"shortName"`
-				LongName              string  `json:"longName"`
-				Currency              string  `json:"currency"`
-				RegularMarketPrice    float64 `json:"regularMarketPrice"`
-				ChartPreviousClose    float64 `json:"chartPreviousClose"`
-				RegularMarketOpen     float64 `json:"regularMarketOpen"`
-				RegularMarketDayHigh  float64 `json:"regularMarketDayHigh"`
-				RegularMarketDayLow   float64 `json:"regularMarketDayLow"`
-				RegularMarketVolume   int64   `json:"regularMarketVolume"`
-				MarketCap             int64   `json:"marketCap"`
+				Symbol               string  `json:"symbol"`
+				ShortName            string  `json:"shortName"`
+				LongName             string  `json:"longName"`
+				Currency             string  `json:"currency"`
+				RegularMarketPrice   float64 `json:"regularMarketPrice"`
+				ChartPreviousClose   float64 `json:"chartPreviousClose"`
+				RegularMarketOpen    float64 `json:"regularMarketOpen"`
+				RegularMarketDayHigh float64 `json:"regularMarketDayHigh"`
+				RegularMarketDayLow  float64 `json:"regularMarketDayLow"`
+				RegularMarketVolume  int64   `json:"regularMarketVolume"`
+				MarketCap            int64   `json:"marketCap"`
 			} `json:"meta"`
 			Timestamps []int64 `json:"timestamp"`
 			Indicators struct {
@@ -192,4 +192,15 @@ func (c *Client) GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetail
 		MarketCap: m.MarketCap,
 		History:   history,
 	}, nil
+}
+
+// GetCurrentPrice obtiene únicamente el precio actual para usarlo en alertas
+func (c *Client) GetCurrentPrice(symbol string) (float64, error) {
+	// Usamos el rango más corto ("1d") para no descargar un historial gigante
+	details, err := c.GetAssetDetails(symbol, "1d")
+	if err != nil {
+		return 0, err
+	}
+
+	return details.Price, nil
 }

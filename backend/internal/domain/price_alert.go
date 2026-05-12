@@ -28,5 +28,6 @@ type PriceAlertRepository interface {
 	GetByUserID(userID uuid.UUID) ([]PriceAlert, error)
 	GetActiveAlertsBySymbol(symbol string) ([]PriceAlert, error)
 	Deactivate(alertID uuid.UUID) error
-	Delete(alertID uuid.UUID) error
+	Delete(alertID uuid.UUID, userID uuid.UUID) error
+	GetSymbolsByDistinctActiveAlerts() ([]string, error)
 }

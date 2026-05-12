@@ -5,25 +5,32 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
-	// Imports nuevos para las migraciones automáticas
+	// Imports para las migraciones automáticas
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/Masega360/vecfin/backend/config"
+	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
+	"github.com/Masega360/vecfin/backend/internal/infrastructure"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
+	"github.com/Masega360/vecfin/backend/internal/worker"
 	"github.com/rs/cors"
 )
 
 func main() {
+	CRON := 10 * time.Minute
+
+
 	// En Docker las vars vienen del compose; godotenv solo aplica en desarrollo local
 	if err := godotenv.Load(); err != nil {
 		log.Println("Aviso: no se encontró .env, usando variables de entorno del sistema")
@@ -93,6 +100,34 @@ func main() {
 	postUC := usecase.NewPostUsecase(postRepo, commRepo)
 	postHandler := handler.NewPostHandler(postUC)
 	postHandler.RegisterRoutes(cfg.JWTSecret)
+
+	settingsRepo := repository.NewPostgresNotificationSettingsRepository(db)
+	priceAlertRepo := repository.NewPostgresPriceAlertRepository(db)
+
+	settingsUC := usecase.NewNotificationSettingUsecase(settingsRepo)
+	settingsHandler := handler.NewNotificationSettingHandler(settingsUC)
+	settingsHandler.RegisterRoutes(cfg.JWTSecret)
+
+	priceAlertUC := usecase.NewPriceAlertUsecase(priceAlertRepo)
+	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertUC)
+	priceAlertHandler.RegisterRoutes(cfg.JWTSecret)
+
+	smtpConf := infrastructure.SMTPConfig{
+		SMTPServer: cfg.SMTPServer,
+		Port:       cfg.SMTPPort,
+		Sender:     cfg.SMTPSender,
+		Password:   cfg.SMTPPassword,
+	}
+	emailProvider := infrastructure.NewEmailService(userRepo, smtpConf)
+
+	dispatcher := usecase.NewNotificationDispatcher(settingsRepo)
+	dispatcher.RegisterProvider(domain.ChannelEmail, emailProvider)
+
+	alertWorker := worker.NewPriceAlertWorker(priceAlertRepo, yahooClient, dispatcher)
+
+	// Inicia el worker para que consulte precios, por ejemplo, cada 5 minutos.
+	// Esto corre en una goroutine y no bloquea el servidor HTTP.
+	alertWorker.Start(CRON)
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
