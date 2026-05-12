@@ -17,7 +17,11 @@ func (f *Fallback) GetRecommendations(ctx context.Context, input domain.Recommen
 	recs, err := f.Primary.GetRecommendations(ctx, input)
 	if err != nil {
 		log.Printf("[ai] primary failed (%v), falling back to secondary", err)
-		return f.Secondary.GetRecommendations(ctx, input)
+		recs, err = f.Secondary.GetRecommendations(ctx, input)
+		if err != nil {
+			log.Printf("[ai] secondary also failed: %v", err)
+		}
+		return recs, err
 	}
 	return recs, nil
 }
@@ -26,7 +30,11 @@ func (f *Fallback) SendMessage(ctx context.Context, history []domain.ChatMessage
 	reply, err := f.Primary.SendMessage(ctx, history, userMessage)
 	if err != nil {
 		log.Printf("[ai] primary failed (%v), falling back to secondary", err)
-		return f.Secondary.SendMessage(ctx, history, userMessage)
+		reply, err = f.Secondary.SendMessage(ctx, history, userMessage)
+		if err != nil {
+			log.Printf("[ai] secondary also failed: %v", err)
+		}
+		return reply, err
 	}
 	return reply, nil
 }
