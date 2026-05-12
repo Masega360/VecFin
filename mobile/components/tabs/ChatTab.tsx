@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
+import AssetChart from '@/components/AssetChart';
 import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
@@ -45,6 +46,17 @@ function ChatMessageContent({ content }: { content: string }) {
                     </Text>
                   </View>
                 </View>
+                {a.history && a.history.length > 0 && (
+                  <View style={{ height: 80, marginVertical: 6 }}>
+                    <AssetChart
+                      history={a.history}
+                      positive={positive}
+                      currency={a.currency}
+                      currentPrice={a.price}
+                      range="7d"
+                    />
+                  </View>
+                )}
                 <View style={styles.assetInlineStats}>
                   <Text style={styles.assetInlineStat}>H: {a.high?.toFixed(2)}</Text>
                   <Text style={styles.assetInlineStat}>L: {a.low?.toFixed(2)}</Text>

@@ -252,9 +252,13 @@ func (t *chatToolExec) SearchNews(query string) string {
 }
 
 func (t *chatToolExec) GetAssetPrice(symbol string) string {
-	details, err := t.market.GetAssetDetails(symbol, "1d")
+	details, err := t.market.GetAssetDetails(symbol, "7d")
 	if err != nil || details == nil {
 		return "No se encontró precio para: " + symbol
+	}
+	history := make([]map[string]any, 0, len(details.History))
+	for _, p := range details.History {
+		history = append(history, map[string]any{"t": p.Timestamp, "c": p.Close})
 	}
 	data, _ := json.Marshal(map[string]any{
 		"symbol":     details.Symbol,
@@ -266,6 +270,7 @@ func (t *chatToolExec) GetAssetPrice(symbol string) string {
 		"high":       details.High,
 		"low":        details.Low,
 		"volume":     details.Volume,
+		"history":    history,
 	})
 	return "Incluí este bloque exacto en tu respuesta para mostrar el asset inline:\n```asset\n" + string(data) + "\n```"
 }
