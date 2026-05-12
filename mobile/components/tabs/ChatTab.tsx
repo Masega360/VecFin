@@ -6,7 +6,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Markdown from 'react-native-markdown-display';
-import Svg, { Polyline, Text as SvgText } from 'react-native-svg';
+import Svg, { Polyline } from 'react-native-svg';
 import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
@@ -53,7 +53,7 @@ function ChatMessageContent({ content, onAssetPress }: { content: string; onAsse
                   const mx = Math.max(...closes);
                   const rng = mx - mn || 1;
                   const sparkW = Dimensions.get('window').width * 0.95 - 24 - 28 - 16;
-                  const h = 50, axisH = 14;
+                  const h = 50;
                   const pts = closes.map((c: number, idx: number) =>
                     `${(idx / (closes.length - 1)) * sparkW},${h - ((c - mn) / rng) * (h - 4) - 2}`
                   ).join(' ');
@@ -61,11 +61,16 @@ function ChatMessageContent({ content, onAssetPress }: { content: string; onAsse
                   const last = new Date(a.history[a.history.length - 1].t * 1000);
                   const fmt = (d: Date) => `${d.getDate()}/${d.getMonth()+1}`;
                   return (
-                    <Svg width={sparkW} height={h + axisH} style={{ marginVertical: 4 }}>
-                      <Polyline points={pts} fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="2" />
-                      <SvgText x="0" y={h + axisH - 2} fontSize="9" fill="#4a6a80">{fmt(first)}</SvgText>
-                      <SvgText x={sparkW} y={h + axisH - 2} fontSize="9" fill="#4a6a80" textAnchor="end">{fmt(last)}</SvgText>
-                    </Svg>
+                    <View>
+                      <Svg width={sparkW} height={h} style={{ marginTop: 4 }}>
+                        <Polyline points={pts} fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="2" />
+                      </Svg>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+                        <Text style={{ color: '#4a6a80', fontSize: 9 }}>{fmt(first)}</Text>
+                        <Text style={{ color: '#4a6a80', fontSize: 9 }}>7d</Text>
+                        <Text style={{ color: '#4a6a80', fontSize: 9 }}>{fmt(last)}</Text>
+                      </View>
+                    </View>
                   );
                 })()}
                 <View style={styles.assetInlineStats}>
