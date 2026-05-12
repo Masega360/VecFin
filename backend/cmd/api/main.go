@@ -134,11 +134,12 @@ func main() {
 		newsHandler := handler.NewNewsHandler(newsSvc)
 		newsHandler.RegisterRoutes(cfg.JWTSecret)
 
-		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo, newsSvc)
+		chatRepo := repository.NewPostgresChatRepository(db)
+
+		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo, newsSvc, assetRepo, chatRepo)
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
-		chatRepo := repository.NewPostgresChatRepository(db)
 		tokenRepo := repository.NewPostgresTokenUsageRepository(db)
 		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
 		chatHandler := handler.NewChatHandler(chatUC)
