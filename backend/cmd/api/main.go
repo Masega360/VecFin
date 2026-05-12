@@ -127,6 +127,9 @@ func main() {
 
 		recCacheRepo := repository.NewPostgresRecommendationRepository(db)
 		newsSvc := news.NewService(news.NewClient(""))
+		newsHandler := handler.NewNewsHandler(newsSvc)
+		newsHandler.RegisterRoutes(cfg.JWTSecret)
+
 		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo, newsSvc)
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
