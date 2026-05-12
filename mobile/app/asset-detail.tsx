@@ -50,7 +50,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 type NewsItem = { title: string; url: string; image_url?: string; source: string; published_at: string };
-type Comment = { id: string; author_name: string; content: string; created_at: string };
+type Comment = { id: string; author_name: string; content: string; likes: number; user_liked: boolean; replies?: Comment[]; created_at: string };
 
 export default function AssetDetailScreen() {
   const { symbol, name, from, fallbackPrice, fallbackCurrency } = useLocalSearchParams<{
@@ -74,6 +74,7 @@ export default function AssetDetailScreen() {
   const [comments,     setComments]     = useState<Comment[]>([]);
   const [commentText,  setCommentText]  = useState('');
   const [posting,      setPosting]      = useState(false);
+  const [replyTo,      setReplyTo]      = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => { fetchInitial(); checkFav(); fetchNews(); fetchComments(); }, []);
   useEffect(() => { if (details) fetchHistory(range); }, [range]);
@@ -194,17 +195,30 @@ export default function AssetDetailScreen() {
     const token = await getValidToken();
     if (!token) { setPosting(false); return; }
     try {
+      const body: any = { content: commentText.trim() };
+      if (replyTo) body.parent_id = replyTo.id;
       const res = await fetch(`${API_URL}/assets/${encodeURIComponent(symbol)}/comments`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: commentText.trim() }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         setCommentText('');
+        setReplyTo(null);
         fetchComments();
       }
     } catch {}
     setPosting(false);
+  };
+
+  const toggleLike = async (commentId: string) => {
+    const token = await getValidToken();
+    if (!token) return;
+    await fetch(`${API_URL}/assets/comments/${commentId}/like`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    fetchComments();
   };
 
   return (
@@ -309,14 +323,24 @@ export default function AssetDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Comentarios</Text>
             <View style={styles.commentInput}>
-              <TextInput
-                style={styles.commentTextInput}
-                placeholder="Escribí un comentario..."
-                placeholderTextColor="#4a6a80"
-                value={commentText}
-                onChangeText={setCommentText}
-                multiline
-              />
+              <View style={{ flex: 1 }}>
+                {replyTo && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ color: '#00ADD8', fontSize: 11 }}>Respondiendo a {replyTo.name}</Text>
+                    <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 6 }}>
+                      <MaterialIcons name="close" size={14} color="#4a6a80" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <TextInput
+                  style={styles.commentTextInput}
+                  placeholder={replyTo ? 'Escribí tu respuesta...' : 'Escribí un comentario...'}
+                  placeholderTextColor="#4a6a80"
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  multiline
+                />
+              </View>
               <TouchableOpacity onPress={postComment} disabled={posting}>
                 <MaterialIcons name="send" size={20} color={posting ? '#2a4a60' : '#00ADD8'} />
               </TouchableOpacity>
@@ -325,12 +349,39 @@ export default function AssetDetailScreen() {
               <Text style={styles.emptyComments}>Sin comentarios aún. ¡Sé el primero!</Text>
             ) : (
               comments.map(c => (
-                <View key={c.id} style={styles.commentCard}>
-                  <View style={styles.commentHeader}>
-                    <Text style={styles.commentAuthor}>{c.author_name}</Text>
-                    <Text style={styles.commentDate}>{new Date(c.created_at).toLocaleDateString()}</Text>
+                <View key={c.id}>
+                  <View style={styles.commentCard}>
+                    <View style={styles.commentHeader}>
+                      <Text style={styles.commentAuthor}>{c.author_name}</Text>
+                      <Text style={styles.commentDate}>{new Date(c.created_at).toLocaleDateString()}</Text>
+                    </View>
+                    <Text style={styles.commentContent}>{c.content}</Text>
+                    <View style={styles.commentActions}>
+                      <TouchableOpacity style={styles.commentAction} onPress={() => toggleLike(c.id)}>
+                        <MaterialIcons name={c.user_liked ? 'favorite' : 'favorite-border'} size={16} color={c.user_liked ? '#ef4444' : '#4a6a80'} />
+                        <Text style={[styles.commentActionText, c.user_liked && { color: '#ef4444' }]}>{c.likes}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.commentAction} onPress={() => setReplyTo({ id: c.id, name: c.author_name })}>
+                        <MaterialIcons name="reply" size={16} color="#4a6a80" />
+                        <Text style={styles.commentActionText}>Responder</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={styles.commentContent}>{c.content}</Text>
+                  {c.replies && c.replies.length > 0 && c.replies.map(reply => (
+                    <View key={reply.id} style={[styles.commentCard, { marginLeft: 24, borderLeftWidth: 2, borderLeftColor: '#00ADD8' }]}>
+                      <View style={styles.commentHeader}>
+                        <Text style={styles.commentAuthor}>{reply.author_name}</Text>
+                        <Text style={styles.commentDate}>{new Date(reply.created_at).toLocaleDateString()}</Text>
+                      </View>
+                      <Text style={styles.commentContent}>{reply.content}</Text>
+                      <View style={styles.commentActions}>
+                        <TouchableOpacity style={styles.commentAction} onPress={() => toggleLike(reply.id)}>
+                          <MaterialIcons name={reply.user_liked ? 'favorite' : 'favorite-border'} size={14} color={reply.user_liked ? '#ef4444' : '#4a6a80'} />
+                          <Text style={[styles.commentActionText, reply.user_liked && { color: '#ef4444' }]}>{reply.likes}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
                 </View>
               ))
             )}
@@ -404,4 +455,7 @@ const styles = StyleSheet.create({
   commentAuthor: { color: '#00ADD8', fontSize: 12, fontWeight: '700' },
   commentDate: { color: '#4a6a80', fontSize: 11 },
   commentContent: { color: '#e2e8f0', fontSize: 13, lineHeight: 18 },
+  commentActions: { flexDirection: 'row', gap: 16, marginTop: 8 },
+  commentAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  commentActionText: { color: '#4a6a80', fontSize: 12 },
 });
