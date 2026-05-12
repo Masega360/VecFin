@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  StyleSheet, Platform, Dimensions,
+  StyleSheet, Platform, Dimensions, Image, TextInput, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -49,6 +49,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+type NewsItem = { title: string; url: string; image_url?: string; source: string; published_at: string };
+type Comment = { id: string; author_name: string; content: string; created_at: string };
+
 export default function AssetDetailScreen() {
   const { symbol, name, from, fallbackPrice, fallbackCurrency } = useLocalSearchParams<{
     symbol: string;
@@ -67,8 +70,12 @@ export default function AssetDetailScreen() {
   const [range,        setRange]        = useState<ChartRange>('1mo');
   const [isFav,        setIsFav]        = useState(false);
   const [favLoading,   setFavLoading]   = useState(false);
+  const [news,         setNews]         = useState<NewsItem[]>([]);
+  const [comments,     setComments]     = useState<Comment[]>([]);
+  const [commentText,  setCommentText]  = useState('');
+  const [posting,      setPosting]      = useState(false);
 
-  useEffect(() => { fetchInitial(); checkFav(); }, []);
+  useEffect(() => { fetchInitial(); checkFav(); fetchNews(); fetchComments(); }, []);
   useEffect(() => { if (details) fetchHistory(range); }, [range]);
 
   // Volvemos siempre a la tab de origen (from). router.back() en web
@@ -167,6 +174,39 @@ export default function AssetDetailScreen() {
 
   const positive = (details?.change ?? 0) >= 0;
 
+  const fetchNews = async () => {
+    try {
+      const res = await fetch(`${API_URL}/news?q=${encodeURIComponent(symbol)}`);
+      if (res.ok) setNews(await res.json());
+    } catch {}
+  };
+
+  const fetchComments = async () => {
+    try {
+      const res = await fetch(`${API_URL}/assets/${encodeURIComponent(symbol)}/comments`);
+      if (res.ok) setComments(await res.json());
+    } catch {}
+  };
+
+  const postComment = async () => {
+    if (!commentText.trim() || posting) return;
+    setPosting(true);
+    const token = await getValidToken();
+    if (!token) { setPosting(false); return; }
+    try {
+      const res = await fetch(`${API_URL}/assets/${encodeURIComponent(symbol)}/comments`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: commentText.trim() }),
+      });
+      if (res.ok) {
+        setCommentText('');
+        fetchComments();
+      }
+    } catch {}
+    setPosting(false);
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -248,6 +288,53 @@ export default function AssetDetailScreen() {
             )}
             <Stat label="Moneda"         value={details.currency} />
           </View>
+
+          {/* News */}
+          {news.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Noticias</Text>
+              {news.map((n, i) => (
+                <TouchableOpacity key={i} style={styles.newsCard} onPress={() => Linking.openURL(n.url)}>
+                  {n.image_url ? <Image source={{ uri: n.image_url }} style={styles.newsImg} /> : null}
+                  <View style={styles.newsBody}>
+                    <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
+                    <Text style={styles.newsMeta}>{n.source}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Comments */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Comentarios</Text>
+            <View style={styles.commentInput}>
+              <TextInput
+                style={styles.commentTextInput}
+                placeholder="Escribí un comentario..."
+                placeholderTextColor="#4a6a80"
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+              />
+              <TouchableOpacity onPress={postComment} disabled={posting}>
+                <MaterialIcons name="send" size={20} color={posting ? '#2a4a60' : '#00ADD8'} />
+              </TouchableOpacity>
+            </View>
+            {comments.length === 0 ? (
+              <Text style={styles.emptyComments}>Sin comentarios aún. ¡Sé el primero!</Text>
+            ) : (
+              comments.map(c => (
+                <View key={c.id} style={styles.commentCard}>
+                  <View style={styles.commentHeader}>
+                    <Text style={styles.commentAuthor}>{c.author_name}</Text>
+                    <Text style={styles.commentDate}>{new Date(c.created_at).toLocaleDateString()}</Text>
+                  </View>
+                  <Text style={styles.commentContent}>{c.content}</Text>
+                </View>
+              ))
+            )}
+          </View>
         </ScrollView>
       ) : null}
     </View>
@@ -302,4 +389,19 @@ const styles = StyleSheet.create({
   statValue: { color: '#fff', fontSize: 18, fontWeight: '700' },
   errorBox:  { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
   errorText: { color: '#ff6666', fontSize: 14 },
+  section:   { marginTop: 20 },
+  sectionTitle: { color: '#e2e8f0', fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  newsCard:  { flexDirection: 'row', backgroundColor: '#132238', borderRadius: 12, marginBottom: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#1e3a5a' },
+  newsImg:   { width: 80, height: 70 },
+  newsBody:  { flex: 1, padding: 10, justifyContent: 'center', gap: 4 },
+  newsTitle: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+  newsMeta:  { color: '#4a6a80', fontSize: 11 },
+  commentInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#132238', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10, borderWidth: 1, borderColor: '#1e3a5a', gap: 8 },
+  commentTextInput: { flex: 1, color: '#e2e8f0', fontSize: 14, maxHeight: 60 },
+  emptyComments: { color: '#4a6a80', fontSize: 13, textAlign: 'center', marginTop: 8 },
+  commentCard: { backgroundColor: '#132238', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#1e3a5a' },
+  commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  commentAuthor: { color: '#00ADD8', fontSize: 12, fontWeight: '700' },
+  commentDate: { color: '#4a6a80', fontSize: 11 },
+  commentContent: { color: '#e2e8f0', fontSize: 13, lineHeight: 18 },
 });

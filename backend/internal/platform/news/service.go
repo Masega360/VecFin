@@ -58,3 +58,13 @@ func (s *Service) HotTopics() []string {
 	}
 	return topics
 }
+
+// HeadlinesByQuery busca noticias por un query específico (ej: ticker).
+func (s *Service) HeadlinesByQuery(query string) []domain.News {
+	c := &Client{query: query, client: s.client.client}
+	headlines, err := c.FetchHeadlines(5)
+	if err != nil {
+		return nil
+	}
+	return headlines
+}

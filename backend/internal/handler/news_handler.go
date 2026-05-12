@@ -9,6 +9,7 @@ import (
 
 type newsService interface {
 	Headlines() []domain.News
+	HeadlinesByQuery(query string) []domain.News
 }
 
 type NewsHandler struct {
@@ -24,7 +25,13 @@ func (h *NewsHandler) RegisterRoutes(jwtSecret string) {
 }
 
 func (h *NewsHandler) GetNews(w http.ResponseWriter, r *http.Request) {
-	headlines := h.news.Headlines()
+	q := r.URL.Query().Get("q")
+	var headlines []domain.News
+	if q != "" {
+		headlines = h.news.HeadlinesByQuery(q)
+	} else {
+		headlines = h.news.Headlines()
+	}
 	if headlines == nil {
 		headlines = []domain.News{}
 	}

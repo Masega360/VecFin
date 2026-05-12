@@ -81,6 +81,10 @@ func main() {
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
+	assetCommentRepo := repository.NewPostgresAssetCommentRepository(db)
+	assetCommentHandler := handler.NewAssetCommentHandler(assetCommentRepo)
+	assetCommentHandler.RegisterRoutes(cfg.JWTSecret)
+
 	walletRepo := repository.NewPostgresWalletRepository(db)
 	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
 	platformRepo := repository.NewPostgresPlatformRepository(db)
