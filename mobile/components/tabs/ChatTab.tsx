@@ -10,19 +10,21 @@ import { API_URL, getValidToken } from '@/utils/api';
 type Session = { id: string; title: string; created_at: string };
 type Message = { id: string; role: 'user' | 'model'; content: string; provider?: string; created_at: string };
 
-// Extracts markdown links and renders them as news cards
+// Extracts markdown links and raw URLs, renders them as news cards
 function ChatMessageContent({ content }: { content: string }) {
-  // Split content into text segments and link segments
-  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  // Match markdown links [title](url) OR raw URLs (with optional surrounding parens/quotes)
+  const combinedRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\(?(https?:\/\/[^\s)]+)\)?/g;
   const parts: { type: 'text' | 'link'; text: string; url?: string; title?: string }[] = [];
   let lastIndex = 0;
   let match;
 
-  while ((match = linkRegex.exec(content)) !== null) {
+  while ((match = combinedRegex.exec(content)) !== null) {
     if (match.index > lastIndex) {
       parts.push({ type: 'text', text: content.slice(lastIndex, match.index) });
     }
-    parts.push({ type: 'link', text: match[1], title: match[1], url: match[2] });
+    const url = match[2] || match[3];
+    const title = match[1] || url.replace(/https?:\/\/(finance\.)?yahoo\.com\/(.*?)\/articles\//, '').replace(/-/g, ' ').slice(0, 80);
+    parts.push({ type: 'link', text: title, title, url });
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < content.length) {

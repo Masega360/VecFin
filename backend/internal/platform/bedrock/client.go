@@ -63,7 +63,7 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 	var sb strings.Builder
 	sb.WriteString("Eres un asistente financiero integrado en la plataforma VecFin. " +
 		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos) y a noticias recientes del mercado. " +
-		"Cuando des recomendaciones, citá las noticias relevantes incluyendo su título y URL. " +
+		"Cuando cites noticias, usá formato markdown: [título de la noticia](url). " +
 		"Podés citar múltiples noticias en una misma respuesta. " +
 		"Respondés en el idioma del usuario, de forma útil y concreta.\n")
 	if systemContext != "" {
