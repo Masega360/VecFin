@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -37,6 +38,7 @@ func (h *RecommendationHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	recs, err := h.uc.Get(r.Context(), userID)
 	if err != nil {
+		log.Printf("[recommendations] error: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

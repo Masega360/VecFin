@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log"
@@ -18,6 +19,8 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
+	"github.com/Masega360/vecfin/backend/internal/platform/aiprovider"
+	"github.com/Masega360/vecfin/backend/internal/platform/bedrock"
 	"github.com/Masega360/vecfin/backend/internal/platform/binance"
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
@@ -110,13 +113,24 @@ func main() {
 		if err != nil {
 			log.Fatal("Error inicializando Gemini:", err)
 		}
+
+		// Bedrock como fallback (usa credenciales AWS del entorno)
+		var aiProvider domain.AIProvider = geminiClient
+		bedrockClient, err := bedrock.NewClient(context.Background(), cfg.AWSRegion)
+		if err != nil {
+			log.Printf("Aviso: Bedrock no disponible (%v), usando solo Gemini", err)
+		} else {
+			aiProvider = &aiprovider.Fallback{Primary: geminiClient, Secondary: bedrockClient}
+			log.Println("AI: Gemini (primary) + Bedrock (fallback)")
+		}
+
 		recCacheRepo := repository.NewPostgresRecommendationRepository(db)
-		recUC := usecase.NewRecommendationUsecase(geminiClient, userRepo, walletRepo, assetWalletRepo, recCacheRepo)
+		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo)
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
 		chatRepo := repository.NewPostgresChatRepository(db)
-		chatUC := usecase.NewChatUsecase(chatRepo, geminiClient)
+		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider)
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {

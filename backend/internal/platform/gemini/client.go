@@ -11,7 +11,7 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/domain"
 )
 
-const model = "gemini-2.0-flash"
+const model = "gemini-2.0-flash-lite"
 
 type Client struct {
 	client *genai.Client
