@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
-import AssetChart from '@/components/AssetChart';
+import Svg, { Polyline } from 'react-native-svg';
 import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
@@ -46,17 +46,21 @@ function ChatMessageContent({ content }: { content: string }) {
                     </Text>
                   </View>
                 </View>
-                {a.history && a.history.length > 0 && (
-                  <View style={{ height: 60, marginVertical: 4, overflow: 'hidden' }}>
-                    <AssetChart
-                      history={a.history}
-                      positive={positive}
-                      currency={a.currency}
-                      currentPrice={a.price}
-                      range="7d"
-                    />
-                  </View>
-                )}
+                {a.history && a.history.length > 1 && (() => {
+                  const closes = a.history.map((p: any) => p.c);
+                  const min = Math.min(...closes);
+                  const max = Math.max(...closes);
+                  const range = max - min || 1;
+                  const w = 220, h = 40;
+                  const points = closes.map((c: number, idx: number) =>
+                    `${(idx / (closes.length - 1)) * w},${h - ((c - min) / range) * h}`
+                  ).join(' ');
+                  return (
+                    <Svg width={w} height={h} style={{ marginVertical: 4 }}>
+                      <Polyline points={points} fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="1.5" />
+                    </Svg>
+                  );
+                })()}
                 <View style={styles.assetInlineStats}>
                   <Text style={styles.assetInlineStat}>H: {a.high?.toFixed(2)}</Text>
                   <Text style={styles.assetInlineStat}>L: {a.low?.toFixed(2)}</Text>
