@@ -4,15 +4,16 @@ import {
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Linking, Image, Alert, Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import Markdown from 'react-native-markdown-display';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Polyline, Text as SvgText } from 'react-native-svg';
 import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
 type Message = { id: string; role: 'user' | 'model'; content: string; provider?: string; created_at: string };
 
 // Extracts markdown links, raw URLs, and asset blocks, renders them richly
-function ChatMessageContent({ content }: { content: string }) {
+function ChatMessageContent({ content, onAssetPress }: { content: string; onAssetPress?: (symbol: string, name: string) => void }) {
   // Split by asset code blocks first
   const assetBlockRegex = /```asset\s*\n?([\s\S]*?)\n?```/g;
   const segments: { type: 'text' | 'asset'; data: string }[] = [];
@@ -33,7 +34,7 @@ function ChatMessageContent({ content }: { content: string }) {
             const a = JSON.parse(seg.data);
             const positive = (a.change || 0) >= 0;
             return (
-              <View key={i} style={styles.assetInlineCard}>
+              <TouchableOpacity key={i} style={styles.assetInlineCard} onPress={() => onAssetPress?.(a.symbol, a.name)}>
                 <View style={styles.assetInlineHeader}>
                   <Text style={styles.assetInlineSymbol}>{a.symbol}</Text>
                   <Text style={styles.assetInlineName}>{a.name}</Text>
@@ -48,18 +49,22 @@ function ChatMessageContent({ content }: { content: string }) {
                 </View>
                 {a.history && a.history.length > 1 && (() => {
                   const closes = a.history.map((p: any) => p.c);
-                  const min = Math.min(...closes);
-                  const max = Math.max(...closes);
-                  const range = max - min || 1;
-                  // bubble 95% - padding(12*2) - card padding(14*2)
+                  const mn = Math.min(...closes);
+                  const mx = Math.max(...closes);
+                  const rng = mx - mn || 1;
                   const sparkW = Dimensions.get('window').width * 0.95 - 24 - 28 - 16;
-                  const h = 50;
+                  const h = 50, axisH = 14;
                   const pts = closes.map((c: number, idx: number) =>
-                    `${(idx / (closes.length - 1)) * sparkW},${h - ((c - min) / range) * (h - 4) - 2}`
+                    `${(idx / (closes.length - 1)) * sparkW},${h - ((c - mn) / rng) * (h - 4) - 2}`
                   ).join(' ');
+                  const first = new Date(a.history[0].t * 1000);
+                  const last = new Date(a.history[a.history.length - 1].t * 1000);
+                  const fmt = (d: Date) => `${d.getDate()}/${d.getMonth()+1}`;
                   return (
-                    <Svg width={sparkW} height={h} style={{ marginVertical: 6 }}>
+                    <Svg width={sparkW} height={h + axisH} style={{ marginVertical: 4 }}>
                       <Polyline points={pts} fill="none" stroke={positive ? '#00D26A' : '#FF4D4D'} strokeWidth="2" />
+                      <SvgText x="0" y={h + axisH - 2} fontSize="9" fill="#4a6a80">{fmt(first)}</SvgText>
+                      <SvgText x={sparkW} y={h + axisH - 2} fontSize="9" fill="#4a6a80" textAnchor="end">{fmt(last)}</SvgText>
                     </Svg>
                   );
                 })()}
@@ -68,7 +73,7 @@ function ChatMessageContent({ content }: { content: string }) {
                   <Text style={styles.assetInlineStat}>L: {a.low?.toFixed(2)}</Text>
                   <Text style={styles.assetInlineStat}>Vol: {a.volume > 1e9 ? (a.volume/1e9).toFixed(1)+'B' : a.volume > 1e6 ? (a.volume/1e6).toFixed(1)+'M' : a.volume}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           } catch { return null; }
         }
@@ -137,6 +142,7 @@ export default function ChatTab() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -303,7 +309,7 @@ export default function ChatTab() {
             <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleModel]}>
               {item.role === 'model' ? (
                 <>
-                  <ChatMessageContent content={item.content} />
+                  <ChatMessageContent content={item.content} onAssetPress={(symbol, name) => router.push({ pathname: '/asset-detail', params: { symbol, name, from: 'chat' } })} />
                   {item.provider && (
                     <Text style={styles.providerLabel}>{item.provider}</Text>
                   )}
