@@ -153,7 +153,12 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 		}
 	}
 
-	return domain.AIResponse{Content: result.Text(), Provider: "gemini"}, nil
+	return domain.AIResponse{
+		Content:      result.Text(),
+		Provider:     "gemini",
+		InputTokens:  int(result.UsageMetadata.PromptTokenCount),
+		OutputTokens: int(result.UsageMetadata.CandidatesTokenCount),
+	}, nil
 }
 
 // historyToContents convierte el historial de dominio al formato del SDK.

@@ -40,6 +40,11 @@ type chatNewsProvider interface {
 	HeadlinesByQuery(query string) []domain.News
 }
 
+type chatTokenRepo interface {
+	Record(ctx context.Context, userID uuid.UUID, provider string, inputTokens, outputTokens int, costUSD float64) error
+	GetMonthly(ctx context.Context, userID uuid.UUID) ([]domain.MonthlyUsage, error)
+}
+
 type ChatUsecase struct {
 	repo        chatRepository
 	ai          domain.AIProvider
@@ -48,10 +53,11 @@ type ChatUsecase struct {
 	assetWallet chatAssetWalletRepository
 	market      chatMarketService
 	news        chatNewsProvider
+	tokens      chatTokenRepo
 }
 
-func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService, news chatNewsProvider) *ChatUsecase {
-	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market, news: news}
+func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService, news chatNewsProvider, tokens chatTokenRepo) *ChatUsecase {
+	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market, news: news, tokens: tokens}
 }
 
 func (uc *ChatUsecase) CreateSession(ctx context.Context, userID uuid.UUID, title string) (domain.ChatSession, error) {
@@ -74,6 +80,10 @@ func (uc *ChatUsecase) ListMessages(ctx context.Context, sessionID, userID uuid.
 		return nil, domain.ErrForbidden
 	}
 	return uc.repo.ListMessages(ctx, sessionID)
+}
+
+func (uc *ChatUsecase) GetMonthlyUsage(ctx context.Context, userID uuid.UUID) ([]domain.MonthlyUsage, error) {
+	return uc.tokens.GetMonthly(ctx, userID)
 }
 
 // SendMessage guarda el mensaje del usuario, llama a la IA con el historial y guarda la respuesta.
@@ -101,6 +111,12 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 	reply, err := uc.ai.SendMessage(ctx, history, content, sysCtx, toolExec)
 	if err != nil {
 		return domain.ChatMessage{}, err
+	}
+
+	// Record token usage
+	if reply.InputTokens > 0 || reply.OutputTokens > 0 {
+		cost := domain.CalculateCost(reply.Provider, reply.InputTokens, reply.OutputTokens)
+		_ = uc.tokens.Record(ctx, userID, reply.Provider, reply.InputTokens, reply.OutputTokens, cost)
 	}
 
 	msg, err := uc.repo.AddMessage(ctx, sessionID, "model", reply.Content)

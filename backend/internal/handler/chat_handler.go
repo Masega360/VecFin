@@ -15,6 +15,7 @@ type chatUsecase interface {
 	ListSessions(ctx context.Context, userID uuid.UUID) ([]domain.ChatSession, error)
 	ListMessages(ctx context.Context, sessionID, userID uuid.UUID) ([]domain.ChatMessage, error)
 	SendMessage(ctx context.Context, sessionID, userID uuid.UUID, content string) (domain.ChatMessage, error)
+	GetMonthlyUsage(ctx context.Context, userID uuid.UUID) ([]domain.MonthlyUsage, error)
 }
 
 type ChatHandler struct {
@@ -31,6 +32,7 @@ func (h *ChatHandler) RegisterRoutes(jwtSecret string) {
 	http.HandleFunc("POST /chat/sessions", auth(h.CreateSession))
 	http.HandleFunc("GET /chat/sessions/{id}/messages", auth(h.ListMessages))
 	http.HandleFunc("POST /chat/sessions/{id}/messages", auth(h.SendMessage))
+	http.HandleFunc("GET /chat/usage", auth(h.GetUsage))
 }
 
 func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
@@ -120,4 +122,23 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(msg)
+}
+
+
+func (h *ChatHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	usage, err := h.uc.GetMonthlyUsage(r.Context(), userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if usage == nil {
+		usage = []domain.MonthlyUsage{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(usage)
 }

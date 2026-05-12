@@ -139,7 +139,8 @@ func main() {
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
 		chatRepo := repository.NewPostgresChatRepository(db)
-		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc)
+		tokenRepo := repository.NewPostgresTokenUsageRepository(db)
+		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {

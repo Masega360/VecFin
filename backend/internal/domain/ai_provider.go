@@ -25,8 +25,10 @@ type Recommendation struct {
 
 // AIResponse es la respuesta de un mensaje de chat con metadata del provider.
 type AIResponse struct {
-	Content  string
-	Provider string // "gemini" | "bedrock"
+	Content      string
+	Provider     string // "gemini" | "bedrock"
+	InputTokens  int
+	OutputTokens int
 }
 
 // RecommendationCache es la fila que se persiste en DB.

@@ -129,8 +129,12 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 		}
 
 		var resp struct {
-			Content  []json.RawMessage `json:"content"`
-			StopReason string          `json:"stop_reason"`
+			Content    []json.RawMessage `json:"content"`
+			StopReason string            `json:"stop_reason"`
+			Usage      struct {
+				InputTokens  int `json:"input_tokens"`
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
 		}
 		if err := json.Unmarshal(out.Body, &resp); err != nil {
 			return domain.AIResponse{}, fmt.Errorf("bedrock parse: %w", err)
@@ -150,7 +154,12 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 					text.WriteString(b.Text)
 				}
 			}
-			return domain.AIResponse{Content: text.String(), Provider: "bedrock"}, nil
+			return domain.AIResponse{
+				Content:      text.String(),
+				Provider:     "bedrock",
+				InputTokens:  resp.Usage.InputTokens,
+				OutputTokens: resp.Usage.OutputTokens,
+			}, nil
 		}
 
 		// Process tool calls
