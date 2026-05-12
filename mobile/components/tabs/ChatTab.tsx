@@ -47,7 +47,7 @@ function ChatMessageContent({ content }: { content: string }) {
                   </View>
                 </View>
                 {a.history && a.history.length > 0 && (
-                  <View style={{ height: 80, marginVertical: 6 }}>
+                  <View style={{ height: 60, marginVertical: 4, overflow: 'hidden' }}>
                     <AssetChart
                       history={a.history}
                       positive={positive}

@@ -63,6 +63,8 @@ func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, 
 		"Tenés acceso a los datos del usuario y podés buscar noticias, precios y activos en tiempo real usando tus herramientas. " +
 		"Cuando cites noticias, usá formato markdown: [título](url). " +
 		"Usá las herramientas siempre que necesites datos actualizados. " +
+		"IMPORTANTE: Cuando uses get_asset_price, el bloque ```asset``` se renderiza visualmente como una tarjeta con precio, gráfico y stats. " +
+		"NO repitas el precio, cambio %, high, low ni volumen en texto porque ya se muestra en la tarjeta. Solo agregá tu análisis u opinión. " +
 		"Respondés en el idioma del usuario, de forma útil y concreta."
 	if systemContext != "" {
 		sysInstruction += "\n\nDatos del usuario en la plataforma:\n" + systemContext
