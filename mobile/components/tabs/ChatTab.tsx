@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import Markdown from 'react-native-markdown-display';
 import { API_URL, getValidToken } from '@/utils/api';
 
 type Session = { id: string; title: string; created_at: string };
@@ -148,9 +149,11 @@ export default function ChatTab() {
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => (
             <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleModel]}>
-              <Text style={[styles.bubbleText, item.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextModel]}>
-                {item.content}
-              </Text>
+              {item.role === 'model' ? (
+                <Markdown style={markdownStyles}>{item.content}</Markdown>
+              ) : (
+                <Text style={styles.bubbleTextUser}>{item.content}</Text>
+              )}
             </View>
           )}
         />
@@ -165,7 +168,9 @@ export default function ChatTab() {
           placeholder="Escribí tu consulta..."
           placeholderTextColor="#2a4a60"
           multiline
+          blurOnSubmit={true}
           onSubmitEditing={sendMessage}
+          returnKeyType="send"
         />
         <TouchableOpacity style={styles.sendBtn} onPress={sendMessage} disabled={sending}>
           {sending
@@ -176,6 +181,15 @@ export default function ChatTab() {
     </KeyboardAvoidingView>
   );
 }
+
+const markdownStyles = {
+  body: { color: '#e2e8f0', fontSize: 14, lineHeight: 20 },
+  code_inline: { backgroundColor: '#0a1628', color: '#00ADD8', borderRadius: 4, paddingHorizontal: 4 },
+  fence: { backgroundColor: '#0a1628', borderRadius: 8, padding: 8 },
+  code_block: { color: '#e2e8f0', fontSize: 13 },
+  strong: { color: '#fff' },
+  link: { color: '#00ADD8' },
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a1628' },
@@ -199,7 +213,7 @@ const styles = StyleSheet.create({
   bubbleUser: { alignSelf: 'flex-end', backgroundColor: '#00ADD8' },
   bubbleModel: { alignSelf: 'flex-start', backgroundColor: '#0f2035', borderWidth: 1, borderColor: '#132238' },
   bubbleText: { fontSize: 14, lineHeight: 20 },
-  bubbleTextUser: { color: '#fff' },
+  bubbleTextUser: { color: '#fff', fontSize: 14, lineHeight: 20 },
   bubbleTextModel: { color: '#e2e8f0' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: '#132238' },
   input: { flex: 1, backgroundColor: '#0f2035', color: '#e2e8f0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: '#132238' },
