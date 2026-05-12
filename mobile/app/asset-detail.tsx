@@ -183,8 +183,12 @@ export default function AssetDetailScreen() {
   };
 
   const fetchComments = async () => {
+    const token = await getValidToken();
+    if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/assets/${encodeURIComponent(symbol)}/comments`);
+      const res = await fetch(`${API_URL}/assets/${encodeURIComponent(symbol)}/comments`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) setComments(await res.json());
     } catch {}
   };
