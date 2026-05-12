@@ -60,5 +60,5 @@ type ChatMessage struct {
 // Para agregar Bedrock, OpenAI, etc. basta con implementar esta interfaz.
 type AIProvider interface {
 	GetRecommendations(ctx context.Context, input RecommendationInput) ([]Recommendation, error)
-	SendMessage(ctx context.Context, history []ChatMessage, userMessage string) (AIResponse, error)
+	SendMessage(ctx context.Context, history []ChatMessage, userMessage string, systemContext string) (AIResponse, error)
 }

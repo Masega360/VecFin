@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/google/uuid"
@@ -15,13 +17,33 @@ type chatRepository interface {
 	ListMessages(ctx context.Context, sessionID uuid.UUID) ([]domain.ChatMessage, error)
 }
 
-type ChatUsecase struct {
-	repo chatRepository
-	ai   domain.AIProvider
+type chatUserRepository interface {
+	FindByID(id uuid.UUID) (domain.User, error)
 }
 
-func NewChatUsecase(repo chatRepository, ai domain.AIProvider) *ChatUsecase {
-	return &ChatUsecase{repo: repo, ai: ai}
+type chatWalletRepository interface {
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error)
+}
+
+type chatAssetWalletRepository interface {
+	ListByWallet(ctx context.Context, walletID uuid.UUID) ([]domain.AssetWallet, error)
+}
+
+type chatMarketService interface {
+	GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetails, error)
+}
+
+type ChatUsecase struct {
+	repo        chatRepository
+	ai          domain.AIProvider
+	users       chatUserRepository
+	wallets     chatWalletRepository
+	assetWallet chatAssetWalletRepository
+	market      chatMarketService
+}
+
+func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService) *ChatUsecase {
+	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market}
 }
 
 func (uc *ChatUsecase) CreateSession(ctx context.Context, userID uuid.UUID, title string) (domain.ChatSession, error) {
@@ -65,7 +87,9 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 		return domain.ChatMessage{}, err
 	}
 
-	reply, err := uc.ai.SendMessage(ctx, history, content)
+	sysCtx := uc.buildUserContext(ctx, userID)
+
+	reply, err := uc.ai.SendMessage(ctx, history, content, sysCtx)
 	if err != nil {
 		return domain.ChatMessage{}, err
 	}
@@ -76,4 +100,48 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 	}
 	msg.Provider = reply.Provider
 	return msg, nil
+}
+
+func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) string {
+	user, err := uc.users.FindByID(userID)
+	if err != nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Usuario: %s %s | Perfil de riesgo: %s\n", user.FirstName, user.LastName, user.RiskType)
+
+	wallets, err := uc.wallets.ListByUser(ctx, userID)
+	if err != nil || len(wallets) == 0 {
+		return sb.String()
+	}
+
+	var totalUSD float64
+	sb.WriteString("Wallets y activos:\n")
+	for _, w := range wallets {
+		assets, err := uc.assetWallet.ListByWallet(ctx, w.ID)
+		if err != nil || len(assets) == 0 {
+			continue
+		}
+		fmt.Fprintf(&sb, "- %s: ", w.Name)
+		items := make([]string, 0, len(assets))
+		for _, a := range assets {
+			if uc.market != nil {
+				if details, derr := uc.market.GetAssetDetails(a.Ticker, "1d"); derr == nil && details != nil {
+					val := a.Quantity * details.Price
+					totalUSD += val
+					items = append(items, fmt.Sprintf("%s: %.4f unidades × $%.2f = $%.2f %s", a.Ticker, a.Quantity, details.Price, val, details.Currency))
+					continue
+				}
+			}
+			items = append(items, fmt.Sprintf("%s: %.4f unidades (precio no disponible)", a.Ticker, a.Quantity))
+		}
+		sb.WriteString(strings.Join(items, ", "))
+		sb.WriteString("\n")
+	}
+	if totalUSD > 0 {
+		fmt.Fprintf(&sb, "Valor total estimado: $%.2f USD\n", totalUSD)
+	}
+	sb.WriteString("Temas calientes del mercado: " + strings.Join(hotTopics, ", ") + "\n")
+	return sb.String()
 }

@@ -47,13 +47,17 @@ func (c *Client) GetRecommendations(ctx context.Context, input domain.Recommenda
 }
 
 // SendMessage envía un mensaje en una conversación multi-turn.
-func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string) (domain.AIResponse, error) {
+func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string) (domain.AIResponse, error) {
+	sysInstruction := "Eres un asistente financiero integrado en la plataforma VecFin. " +
+		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos). " +
+		"Usá esa información para responder sus consultas de forma directa y concreta. " +
+		"Respondés en el idioma del usuario, de forma breve y útil."
+	if systemContext != "" {
+		sysInstruction += "\n\nDatos del usuario en la plataforma:\n" + systemContext
+	}
+
 	chat, err := c.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
-		SystemInstruction: genai.NewContentFromText(
-			"Eres un asistente financiero experto. Ayudás al usuario con análisis de mercado, "+
-				"estrategias de inversión y consultas sobre sus activos. Respondés en el idioma del usuario.",
-			"user",
-		),
+		SystemInstruction: genai.NewContentFromText(sysInstruction, "user"),
 	}, historyToContents(history))
 	if err != nil {
 		return domain.AIResponse{}, fmt.Errorf("gemini chat: %w", err)

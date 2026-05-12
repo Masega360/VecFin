@@ -35,7 +35,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       AWS_REGION: ${AWS_REGION:-us-east-1}
     volumes:
-      - ${USERPROFILE}/.aws:/root/.aws:ro
+      - ${USERPROFILE}/.aws:/root/.aws
     ports:
       - "${PORT}:${PORT}"
 

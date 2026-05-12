@@ -62,7 +62,8 @@ export default function ChatTab() {
     setSending(true);
 
     // Optimistic update
-    const tempMsg: Message = { id: 'temp', role: 'user', content: text, created_at: new Date().toISOString() };
+    const tempId = `temp-${Date.now()}`;
+    const tempMsg: Message = { id: tempId, role: 'user', content: text, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, tempMsg]);
 
     const token = await getValidToken();
@@ -76,8 +77,7 @@ export default function ChatTab() {
 
     if (res.ok) {
       const reply: Message = await res.json();
-      // Reemplazar temp + agregar reply
-      setMessages(prev => [...prev.filter(m => m.id !== 'temp'), tempMsg, reply]);
+      setMessages(prev => [...prev.filter(m => m.id !== tempId), { ...tempMsg, id: `user-${Date.now()}` }, reply]);
     }
     setSending(false);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);

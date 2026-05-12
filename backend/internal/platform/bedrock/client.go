@@ -58,10 +58,19 @@ Responde ÚNICAMENTE con un array JSON válido, sin texto adicional, con este fo
 	return recs, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string) (domain.AIResponse, error) {
+func (c *Client) SendMessage(ctx context.Context, history []domain.ChatMessage, userMessage string, systemContext string) (domain.AIResponse, error) {
 	// Construir historial como texto para el prompt
 	var sb strings.Builder
-	sb.WriteString("Eres un asistente financiero experto. Respondés en el idioma del usuario.\n\n")
+	sb.WriteString("Eres un asistente financiero integrado en la plataforma VecFin. " +
+		"Tenés acceso a los datos financieros del usuario (perfil, wallets y activos). " +
+		"Usá esa información para responder sus consultas de forma directa y concreta. " +
+		"Respondés en el idioma del usuario, de forma breve y útil.\n")
+	if systemContext != "" {
+		sb.WriteString("\nDatos del usuario en la plataforma:\n")
+		sb.WriteString(systemContext)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
 	for _, m := range history {
 		role := "Usuario"
 		if m.Role == "model" {
