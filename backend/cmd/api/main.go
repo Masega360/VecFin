@@ -28,8 +28,7 @@ import (
 )
 
 func main() {
-	CRON := 10 * time.Minute
-
+	CRON := 1 * time.Minute
 
 	// En Docker las vars vienen del compose; godotenv solo aplica en desarrollo local
 	if err := godotenv.Load(); err != nil {
@@ -100,6 +99,11 @@ func main() {
 	postUC := usecase.NewPostUsecase(postRepo, commRepo)
 	postHandler := handler.NewPostHandler(postUC)
 	postHandler.RegisterRoutes(cfg.JWTSecret)
+
+	simulatorRepo := repository.NewPostgresSimulatorRepository(db)
+	simulatorUC := usecase.NewSimulatorUsecase(simulatorRepo)
+	simulatorHandler := handler.NewSimulatorHandler(simulatorUC)
+	simulatorHandler.RegisterRoutes(cfg.JWTSecret)
 
 	settingsRepo := repository.NewPostgresNotificationSettingsRepository(db)
 	priceAlertRepo := repository.NewPostgresPriceAlertRepository(db)
