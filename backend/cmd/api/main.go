@@ -22,6 +22,7 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/infrastructure"
 	"github.com/Masega360/vecfin/backend/internal/platform/aiprovider"
+	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
 	"github.com/Masega360/vecfin/backend/internal/platform/bedrock"
 	"github.com/Masega360/vecfin/backend/internal/platform/binance"
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
@@ -137,6 +138,11 @@ func main() {
 	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, marketUC)
 	dashboardHandler := handler.NewDashboardHandler(dashboardUC)
 	dashboardHandler.RegisterRoutes(cfg.JWTSecret)
+
+	pdfGen := pdf.NewFPDFGenerator()
+	fiscalUC := usecase.NewFiscalReportUsecase(userRepo, walletRepo, assetWalletRepo, marketUC, pdfGen)
+	fiscalHandler := handler.NewFiscalReportHandler(fiscalUC)
+	fiscalHandler.RegisterRoutes(cfg.JWTSecret)
 
 	smtpConf := infrastructure.SMTPConfig{
 		SMTPServer: cfg.SMTPServer,
