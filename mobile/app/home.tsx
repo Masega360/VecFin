@@ -15,6 +15,7 @@ import ExchangesTab from '@/components/tabs/ExchangesTab';
 import RecommendationsTab from '@/components/tabs/RecommendationsTab';
 import ChatTab from '@/components/tabs/ChatTab';
 import NewsTab from '@/components/tabs/NewsTab';
+import DashboardTab from '@/components/tabs/DashboardTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -34,6 +35,12 @@ const TABS: TabConfig[] = [
     label: 'Perfil',
     icon: 'person',
     component: ProfileTab,
+  },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: 'dashboard',
+    component: DashboardTab,
   },
   {
     id: 'assets',

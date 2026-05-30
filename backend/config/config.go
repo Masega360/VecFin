@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -58,7 +59,7 @@ func (c *Config) Validate() error {
 		return errors.New("PORT no puede estar vacío")
 	}
 	if c.SMTPServer == "" || c.SMTPSender == "" || c.SMTPPassword == "" {
-		return errors.New("faltan configurar las credenciales SMTP en el entorno")
+		fmt.Println("Aviso: credenciales SMTP no configuradas, notificaciones por email deshabilitadas")
 	}
 	return nil
 }

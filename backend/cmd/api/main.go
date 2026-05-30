@@ -134,6 +134,10 @@ func main() {
 	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertUC)
 	priceAlertHandler.RegisterRoutes(cfg.JWTSecret)
 
+	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, marketUC)
+	dashboardHandler := handler.NewDashboardHandler(dashboardUC)
+	dashboardHandler.RegisterRoutes(cfg.JWTSecret)
+
 	smtpConf := infrastructure.SMTPConfig{
 		SMTPServer: cfg.SMTPServer,
 		Port:       cfg.SMTPPort,

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, Platform, Dimensions, Modal, TextInput, Linking,
-  KeyboardAvoidingView, Animated, Pressable,
+  KeyboardAvoidingView, Animated, Pressable, Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -476,7 +476,7 @@ export default function AssetDetailScreen() {
             </Text>
           </View>
         )}
-      </View
+      </View>
 
               <View style={styles.rangeBar}>
                 {RANGES.map(r => (
@@ -524,6 +524,90 @@ export default function AssetDetailScreen() {
                 <Text style={styles.alertCTAText}>Crear alerta de precio</Text>
                 <MaterialIcons name="chevron-right" size={18} color="#00ADD8" />
               </TouchableOpacity>
+
+              {/* News */}
+              {news.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Noticias</Text>
+                  {news.map((n, i) => (
+                    <TouchableOpacity key={i} style={styles.newsCard} onPress={() => Linking.openURL(n.url)}>
+                      {n.image_url ? <Image source={{ uri: n.image_url }} style={styles.newsImg} /> : null}
+                      <View style={styles.newsBody}>
+                        <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
+                        <Text style={styles.newsMeta}>{n.source}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Comments */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Comentarios</Text>
+                <View style={styles.commentInput}>
+                  <View style={{ flex: 1 }}>
+                    {replyTo && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ color: '#00ADD8', fontSize: 11 }}>Respondiendo a {replyTo.name}</Text>
+                        <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 6 }}>
+                          <MaterialIcons name="close" size={14} color="#4a6a80" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    <TextInput
+                      style={styles.commentTextInput}
+                      placeholder={replyTo ? 'Escribí tu respuesta...' : 'Escribí un comentario...'}
+                      placeholderTextColor="#4a6a80"
+                      value={commentText}
+                      onChangeText={setCommentText}
+                      multiline
+                    />
+                  </View>
+                  <TouchableOpacity onPress={postComment} disabled={posting}>
+                    <MaterialIcons name="send" size={20} color={posting ? '#2a4a60' : '#00ADD8'} />
+                  </TouchableOpacity>
+                </View>
+                {comments.length === 0 ? (
+                  <Text style={styles.emptyComments}>Sin comentarios aún. ¡Sé el primero!</Text>
+                ) : (
+                  comments.map(c => (
+                    <View key={c.id}>
+                      <View style={styles.commentCard}>
+                        <View style={styles.commentHeader}>
+                          <Text style={styles.commentAuthor}>{c.author_name}</Text>
+                          <Text style={styles.commentDate}>{new Date(c.created_at).toLocaleDateString()}</Text>
+                        </View>
+                        <Text style={styles.commentContent}>{c.content}</Text>
+                        <View style={styles.commentActions}>
+                          <TouchableOpacity style={styles.commentAction} onPress={() => toggleLike(c.id)}>
+                            <MaterialIcons name={c.user_liked ? 'favorite' : 'favorite-border'} size={16} color={c.user_liked ? '#ef4444' : '#4a6a80'} />
+                            <Text style={[styles.commentActionText, c.user_liked && { color: '#ef4444' }]}>{c.likes}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.commentAction} onPress={() => setReplyTo({ id: c.id, name: c.author_name })}>
+                            <MaterialIcons name="reply" size={16} color="#4a6a80" />
+                            <Text style={styles.commentActionText}>Responder</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      {c.replies && c.replies.length > 0 && c.replies.map(reply => (
+                        <View key={reply.id} style={[styles.commentCard, { marginLeft: 24, borderLeftWidth: 2, borderLeftColor: '#00ADD8' }]}>
+                          <View style={styles.commentHeader}>
+                            <Text style={styles.commentAuthor}>{reply.author_name}</Text>
+                            <Text style={styles.commentDate}>{new Date(reply.created_at).toLocaleDateString()}</Text>
+                          </View>
+                          <Text style={styles.commentContent}>{reply.content}</Text>
+                          <View style={styles.commentActions}>
+                            <TouchableOpacity style={styles.commentAction} onPress={() => toggleLike(reply.id)}>
+                              <MaterialIcons name={reply.user_liked ? 'favorite' : 'favorite-border'} size={14} color={reply.user_liked ? '#ef4444' : '#4a6a80'} />
+                              <Text style={[styles.commentActionText, reply.user_liked && { color: '#ef4444' }]}>{reply.likes}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ))
+                )}
+              </View>
             </ScrollView>
         ) : null}
 
@@ -536,105 +620,8 @@ export default function AssetDetailScreen() {
                 currentPrice={details.price}
                 onClose={() => setAlertSheet(false)}
             />
-          </View>
-
-          <View style={styles.statsGrid}>
-            <Stat label="Apertura"       value={details.open.toFixed(2)} />
-            <Stat label="Máximo del día" value={details.high.toFixed(2)} />
-            <Stat label="Mínimo del día" value={details.low.toFixed(2)} />
-            <Stat label="Volumen"        value={formatVolume(details.volume)} />
-            {details.market_cap > 0 && (
-              <Stat label="Cap. mercado" value={formatVolume(details.market_cap)} />
-            )}
-            <Stat label="Moneda"         value={details.currency} />
-          </View>
-
-          {/* News */}
-          {news.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Noticias</Text>
-              {news.map((n, i) => (
-                <TouchableOpacity key={i} style={styles.newsCard} onPress={() => Linking.openURL(n.url)}>
-                  {n.image_url ? <Image source={{ uri: n.image_url }} style={styles.newsImg} /> : null}
-                  <View style={styles.newsBody}>
-                    <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
-                    <Text style={styles.newsMeta}>{n.source}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Comments */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Comentarios</Text>
-            <View style={styles.commentInput}>
-              <View style={{ flex: 1 }}>
-                {replyTo && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ color: '#00ADD8', fontSize: 11 }}>Respondiendo a {replyTo.name}</Text>
-                    <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 6 }}>
-                      <MaterialIcons name="close" size={14} color="#4a6a80" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <TextInput
-                  style={styles.commentTextInput}
-                  placeholder={replyTo ? 'Escribí tu respuesta...' : 'Escribí un comentario...'}
-                  placeholderTextColor="#4a6a80"
-                  value={commentText}
-                  onChangeText={setCommentText}
-                  multiline
-                />
-              </View>
-              <TouchableOpacity onPress={postComment} disabled={posting}>
-                <MaterialIcons name="send" size={20} color={posting ? '#2a4a60' : '#00ADD8'} />
-              </TouchableOpacity>
-            </View>
-            {comments.length === 0 ? (
-              <Text style={styles.emptyComments}>Sin comentarios aún. ¡Sé el primero!</Text>
-            ) : (
-              comments.map(c => (
-                <View key={c.id}>
-                  <View style={styles.commentCard}>
-                    <View style={styles.commentHeader}>
-                      <Text style={styles.commentAuthor}>{c.author_name}</Text>
-                      <Text style={styles.commentDate}>{new Date(c.created_at).toLocaleDateString()}</Text>
-                    </View>
-                    <Text style={styles.commentContent}>{c.content}</Text>
-                    <View style={styles.commentActions}>
-                      <TouchableOpacity style={styles.commentAction} onPress={() => toggleLike(c.id)}>
-                        <MaterialIcons name={c.user_liked ? 'favorite' : 'favorite-border'} size={16} color={c.user_liked ? '#ef4444' : '#4a6a80'} />
-                        <Text style={[styles.commentActionText, c.user_liked && { color: '#ef4444' }]}>{c.likes}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.commentAction} onPress={() => setReplyTo({ id: c.id, name: c.author_name })}>
-                        <MaterialIcons name="reply" size={16} color="#4a6a80" />
-                        <Text style={styles.commentActionText}>Responder</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  {c.replies && c.replies.length > 0 && c.replies.map(reply => (
-                    <View key={reply.id} style={[styles.commentCard, { marginLeft: 24, borderLeftWidth: 2, borderLeftColor: '#00ADD8' }]}>
-                      <View style={styles.commentHeader}>
-                        <Text style={styles.commentAuthor}>{reply.author_name}</Text>
-                        <Text style={styles.commentDate}>{new Date(reply.created_at).toLocaleDateString()}</Text>
-                      </View>
-                      <Text style={styles.commentContent}>{reply.content}</Text>
-                      <View style={styles.commentActions}>
-                        <TouchableOpacity style={styles.commentAction} onPress={() => toggleLike(reply.id)}>
-                          <MaterialIcons name={reply.user_liked ? 'favorite' : 'favorite-border'} size={14} color={reply.user_liked ? '#ef4444' : '#4a6a80'} />
-                          <Text style={[styles.commentActionText, reply.user_liked && { color: '#ef4444' }]}>{reply.likes}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ))
-            )}
-          </View>
-        </ScrollView>
-      ) : null}
-    </View>
+        )}
+      </View>
   );
 }
 
