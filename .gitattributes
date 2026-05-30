@@ -1,20 +1,21 @@
-# Ignorar configuración y scripts de Expo/React Native
-mobile/app.json linguist-generated
-mobile/eslint.config.js linguist-generated
-mobile/scripts/** linguist-generated
+# Lock files
+mobile/package-lock.json linguist-generated=true
 
-# Ignorar componentes y hooks por defecto del template de Expo
-mobile/components/hello-wave.tsx linguist-generated
-mobile/components/parallax-scroll-view.tsx linguist-generated
-mobile/components/external-link.tsx linguist-generated
-mobile/components/haptic-tab.tsx linguist-generated
-mobile/components/ui/** linguist-generated
-mobile/components/themed-*.tsx linguist-generated
+# Expo/React Native config y scripts
+mobile/app.json linguist-generated=true
+mobile/eslint.config.js linguist-generated=true
+mobile/scripts/** linguist-generated=true
 
-# Ignorar hooks y constantes por defecto
-mobile/hooks/use-color-scheme*.ts linguist-generated
-mobile/hooks/use-theme-color.ts linguist-generated
-mobile/constants/theme.ts linguist-generated
+# Componentes y hooks del template de Expo
+mobile/components/hello-wave.tsx linguist-generated=true
+mobile/components/parallax-scroll-view.tsx linguist-generated=true
+mobile/components/external-link.tsx linguist-generated=true
+mobile/components/haptic-tab.tsx linguist-generated=true
+mobile/components/ui/** linguist-generated=true
+mobile/components/themed-*.tsx linguist-generated=true
+mobile/hooks/use-color-scheme*.ts linguist-generated=true
+mobile/hooks/use-theme-color.ts linguist-generated=true
+mobile/constants/theme.ts linguist-generated=true
 
-# Ignorar los assets (imágenes, fuentes, etc.)
-mobile/assets/** linguist-generated
+# Assets
+mobile/assets/** linguist-generated=true
