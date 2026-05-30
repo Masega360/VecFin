@@ -14,6 +14,7 @@ type FiscalReportUsecase struct {
 	assetWalletRepo domain.AssetWalletRepository
 	marketUC        *MarketUsecase
 	pdfGen          domain.PDFGenerator
+	tokenRepo       domain.TokenUsageRepository
 }
 
 func NewFiscalReportUsecase(
@@ -22,6 +23,7 @@ func NewFiscalReportUsecase(
 	assetWalletRepo domain.AssetWalletRepository,
 	marketUC *MarketUsecase,
 	pdfGen domain.PDFGenerator,
+	tokenRepo domain.TokenUsageRepository,
 ) *FiscalReportUsecase {
 	return &FiscalReportUsecase{
 		userRepo:        userRepo,
@@ -29,6 +31,7 @@ func NewFiscalReportUsecase(
 		assetWalletRepo: assetWalletRepo,
 		marketUC:        marketUC,
 		pdfGen:          pdfGen,
+		tokenRepo:       tokenRepo,
 	}
 }
 
@@ -78,6 +81,9 @@ func (u *FiscalReportUsecase) Generate(userID uuid.UUID) ([]byte, error) {
 		Lines:       lines,
 		TotalUSD:    total,
 	}
+
+	aiUsage, _ := u.tokenRepo.GetMonthly(ctx, userID)
+	report.AIUsage = aiUsage
 
 	return u.pdfGen.GenerateFiscalReport(report)
 }

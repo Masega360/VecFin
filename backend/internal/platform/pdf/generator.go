@@ -58,6 +58,36 @@ func (g *FPDFGenerator) GenerateFiscalReport(report domain.FiscalReport) ([]byte
 	pdf.SetFont("Arial", "B", 12)
 	pdf.Cell(0, 10, fmt.Sprintf("Total patrimonio: $%.2f USD", report.TotalUSD))
 
+	// AI Usage section
+	if len(report.AIUsage) > 0 {
+		pdf.Ln(16)
+		pdf.SetFont("Arial", "B", 14)
+		pdf.Cell(0, 10, "Uso de Inteligencia Artificial")
+		pdf.Ln(12)
+
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFillColor(0, 173, 216)
+		pdf.SetTextColor(255, 255, 255)
+		pdf.CellFormat(45, 8, "Proveedor", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(40, 8, "Tokens Input", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(40, 8, "Tokens Output", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(40, 8, "Costo USD", "1", 1, "C", true, 0, "")
+
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(0, 0, 0)
+		var totalAICost float64
+		for _, u := range report.AIUsage {
+			pdf.CellFormat(45, 7, u.Provider, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(40, 7, fmt.Sprintf("%d", u.InputTokens), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(40, 7, fmt.Sprintf("%d", u.OutputTokens), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(40, 7, fmt.Sprintf("$%.4f", u.TotalCostUSD), "1", 1, "R", false, 0, "")
+			totalAICost += u.TotalCostUSD
+		}
+		pdf.Ln(2)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(0, 7, fmt.Sprintf("Costo total IA (mes actual): $%.4f USD", totalAICost))
+	}
+
 	// Footer disclaimer
 	pdf.Ln(16)
 	pdf.SetFont("Arial", "I", 8)

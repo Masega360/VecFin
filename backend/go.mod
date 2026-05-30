@@ -5,12 +5,16 @@ go 1.26.1
 require github.com/google/uuid v1.6.0
 
 require (
+	github.com/aws/aws-sdk-go-v2/config v1.32.17
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.6
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/go-pdf/fpdf v0.9.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.11.2
+	github.com/rs/cors v1.11.1
 	golang.org/x/crypto v0.49.0
+	google.golang.org/genai v1.56.0
 )
 
 require (
@@ -19,13 +23,11 @@ require (
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.7 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.32.17 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
-	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
@@ -41,7 +43,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/rs/cors v1.11.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
@@ -50,7 +51,6 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
-	google.golang.org/genai v1.56.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c // indirect
 	google.golang.org/grpc v1.74.2 // indirect
 	google.golang.org/protobuf v1.36.7 // indirect

@@ -140,7 +140,8 @@ func main() {
 	dashboardHandler.RegisterRoutes(cfg.JWTSecret)
 
 	pdfGen := pdf.NewFPDFGenerator()
-	fiscalUC := usecase.NewFiscalReportUsecase(userRepo, walletRepo, assetWalletRepo, marketUC, pdfGen)
+	tokenRepo := repository.NewPostgresTokenUsageRepository(db)
+	fiscalUC := usecase.NewFiscalReportUsecase(userRepo, walletRepo, assetWalletRepo, marketUC, pdfGen, tokenRepo)
 	fiscalHandler := handler.NewFiscalReportHandler(fiscalUC)
 	fiscalHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -187,7 +188,6 @@ func main() {
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
-		tokenRepo := repository.NewPostgresTokenUsageRepository(db)
 		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)

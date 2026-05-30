@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { API_URL, getValidToken } from '@/utils/api';
 import TokenUsageCard from '@/components/TokenUsageCard';
 
@@ -74,16 +72,30 @@ export default function ProfileTab() {
     const token = await getValidToken();
     if (!token) return;
     try {
-      const fileUri = FileSystem.documentDirectory + 'reporte_fiscal.pdf';
-      const res = await FileSystem.downloadAsync(
-        `${API_URL}/users/me/fiscal-report`,
-        fileUri,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.status === 200) {
-        await Sharing.shareAsync(res.uri, { mimeType: 'application/pdf' });
+      if (Platform.OS === 'web') {
+        const res = await fetch(`${API_URL}/users/me/fiscal-report`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) { Alert.alert('Error', 'No se pudo generar el reporte fiscal'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reporte_fiscal.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
       } else {
-        Alert.alert('Error', 'No se pudo generar el reporte fiscal');
+        const fileUri = FileSystem.documentDirectory + 'reporte_fiscal.pdf';
+        const res = await FileSystem.downloadAsync(
+          `${API_URL}/users/me/fiscal-report`,
+          fileUri,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.status === 200) {
+          await Sharing.shareAsync(res.uri, { mimeType: 'application/pdf' });
+        } else {
+          Alert.alert('Error', 'No se pudo generar el reporte fiscal');
+        }
       }
     } catch {
       Alert.alert('Error', 'Sin conexión al servidor');
