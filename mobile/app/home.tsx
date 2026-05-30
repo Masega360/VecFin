@@ -10,6 +10,7 @@ import AssetsTab from '@/components/tabs/AssetsTab';
 import WalletsTab from '@/components/tabs/WalletsTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import CommunityTab from '@/components/tabs/CommunityTab';
+import SimulatorTab from '@/components/tabs/SimulatorTab';
 import ExchangesTab from '@/components/tabs/ExchangesTab';
 import RecommendationsTab from '@/components/tabs/RecommendationsTab';
 import ChatTab from '@/components/tabs/ChatTab';
@@ -57,6 +58,12 @@ const TABS: TabConfig[] = [
     label: 'Comunidad',
     icon: 'people',
     component: CommunityTab, 
+  },
+  {
+    id: 'simulator',
+    label: 'Simulador',
+    icon: 'calculate',
+    component: SimulatorTab,
   },
   {
     id: 'recommendations',

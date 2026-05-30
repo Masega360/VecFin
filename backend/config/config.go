@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 )
 
 type Config struct {
@@ -14,11 +15,20 @@ type Config struct {
 	Port           string
 	JWTSecret      string
 	MigrationsPath string
+	SMTPServer     string
+	SMTPPort       int
+	SMTPSender     string
+	SMTPPassword   string
 	GeminiAPIKey   string
 	AWSRegion      string
 }
 
 func Load() *Config {
+	portStr := os.Getenv("SMTP_PORT")
+	smtpPort, err := strconv.Atoi(portStr)
+	if err != nil {
+		smtpPort = 587
+	}
 	return &Config{
 		DBHost:         os.Getenv("DB_HOST"),
 		DBPort:         os.Getenv("DB_PORT"),
@@ -28,6 +38,10 @@ func Load() *Config {
 		Port:           os.Getenv("PORT"),
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		MigrationsPath: getEnvOrDefault("MIGRATIONS_PATH", "file://migrations"),
+		SMTPServer:     os.Getenv("SMTP_SERVER"),
+		SMTPPort:       smtpPort,
+		SMTPSender:     os.Getenv("SMTP_SENDER"),
+		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
 		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
 		AWSRegion:      getEnvOrDefault("AWS_REGION", "us-east-1"),
 	}
@@ -42,6 +56,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Port == "" {
 		return errors.New("PORT no puede estar vacío")
+	}
+	if c.SMTPServer == "" || c.SMTPSender == "" || c.SMTPPassword == "" {
+		return errors.New("faltan configurar las credenciales SMTP en el entorno")
 	}
 	return nil
 }

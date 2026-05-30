@@ -33,6 +33,10 @@ services:
       DB_PORT: ${DB_PORT}
       PORT: ${PORT}
       JWT_SECRET: ${JWT_SECRET}
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SENDER: ${SMTP_SENDER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       AWS_REGION: ${AWS_REGION:-us-east-1}
     volumes:
