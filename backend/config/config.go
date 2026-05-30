@@ -19,6 +19,8 @@ type Config struct {
 	SMTPPort       int
 	SMTPSender     string
 	SMTPPassword   string
+	GeminiAPIKey   string
+	AWSRegion      string
 }
 
 func Load() *Config {
@@ -40,6 +42,8 @@ func Load() *Config {
 		SMTPPort:       smtpPort,
 		SMTPSender:     os.Getenv("SMTP_SENDER"),
 		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
+		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
+		AWSRegion:      getEnvOrDefault("AWS_REGION", "us-east-1"),
 	}
 }
 

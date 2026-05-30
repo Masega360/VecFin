@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL, getValidToken } from '@/utils/api';
+import TokenUsageCard from '@/components/TokenUsageCard';
 
 interface User {
   id: string;
@@ -97,6 +98,10 @@ export default function ProfileTab() {
         <MaterialIcons name="edit" size={18} color="#fff" />
         <Text style={styles.btnText}>Editar perfil</Text>
       </TouchableOpacity>
+
+      <View style={{ marginVertical: 12 }}>
+        <TokenUsageCard />
+      </View>
 
       <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
         <MaterialIcons name="logout" size={18} color="#fff" />

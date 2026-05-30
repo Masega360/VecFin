@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -24,10 +26,18 @@ var ErrInvalidQuantity = errors.New("cantidad inválida: debe ser mayor a cero")
 // ErrInvalidTicker se devuelve cuando el ticker es vacío.
 var ErrInvalidTicker = errors.New("ticker inválido: no puede estar vacío")
 
+type platformRepository interface {
+	GetByID(id string) (*domain.Platform, error)
+}
+
 type WalletsUseCase struct {
-	repo       walletRepository
-	assetsRepo domain.AssetWalletRepository
-	market     domain.MarketService
+	repo         walletRepository
+	assetsRepo   domain.AssetWalletRepository
+	market       domain.MarketService
+	platformRepo platformRepository
+	// exchanges mapea el nombre de la plataforma (lowercase) a su ExchangeService.
+	// Ej: "binance" -> *binance.Client
+	exchanges map[string]domain.ExchangeService
 }
 
 // NewWalletsUseCase construye el usecase. assetsRepo y market pueden ser nil
@@ -36,8 +46,16 @@ func NewWalletsUseCase(
 	repo walletRepository,
 	assetsRepo domain.AssetWalletRepository,
 	market domain.MarketService,
+	platformRepo platformRepository,
+	exchanges map[string]domain.ExchangeService,
 ) *WalletsUseCase {
-	return &WalletsUseCase{repo: repo, assetsRepo: assetsRepo, market: market}
+	return &WalletsUseCase{
+		repo:         repo,
+		assetsRepo:   assetsRepo,
+		market:       market,
+		platformRepo: platformRepo,
+		exchanges:    exchanges,
+	}
 }
 
 func (uc *WalletsUseCase) Create(ctx context.Context, wallet domain.Wallet) (uuid.UUID, error) {
@@ -85,9 +103,10 @@ func (uc *WalletsUseCase) Update(ctx context.Context, id, userID uuid.UUID, chan
 	return uc.repo.UpdateWallet(ctx, id, current)
 }
 
-// UpdateLastSync marca la wallet como sincronizada ahora.
-// Se llama cuando la API de la plataforma devuelve datos nuevos.
-func (uc *WalletsUseCase) UpdateLastSync(ctx context.Context, id, userID uuid.UUID) error {
+// SyncFromExchange obtiene los holdings del exchange asociado a la wallet
+// y los upsertea como assets. Si la wallet no tiene API key o no hay exchange
+// registrado para su plataforma, devuelve error.
+func (uc *WalletsUseCase) SyncFromExchange(ctx context.Context, id, userID uuid.UUID) error {
 	wallet, err := uc.repo.ReadWallet(ctx, id)
 	if err != nil {
 		return err
@@ -95,6 +114,41 @@ func (uc *WalletsUseCase) UpdateLastSync(ctx context.Context, id, userID uuid.UU
 	if wallet.UserID != userID {
 		return domain.ErrForbidden
 	}
+	if wallet.APIKey == nil || wallet.APISecret == nil {
+		return domain.ErrNoAPICredentials
+	}
+
+	platform, err := uc.platformRepo.GetByID(wallet.PlatformID.String())
+	if err != nil {
+		return fmt.Errorf("plataforma no encontrada: %w", err)
+	}
+
+	svc, ok := uc.exchanges[strings.ToLower(platform.Name)]
+	if !ok {
+		return domain.ErrExchangeNotSupported
+	}
+
+	holdings, err := svc.GetHoldings(*wallet.APIKey, *wallet.APISecret)
+	if err != nil {
+		return fmt.Errorf("exchange: %w", err)
+	}
+
+	for _, h := range holdings {
+		existing, err := uc.assetsRepo.GetByWalletAndTicker(ctx, id, h.Ticker)
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return err
+		}
+		if errors.Is(err, domain.ErrNotFound) || existing.ID == uuid.Nil {
+			if _, err := uc.assetsRepo.Add(ctx, id, h.Ticker, h.Quantity); err != nil {
+				return err
+			}
+		} else {
+			if err := uc.assetsRepo.UpdateQuantity(ctx, id, h.Ticker, h.Quantity); err != nil {
+				return err
+			}
+		}
+	}
+
 	return uc.repo.UpdateLastSync(ctx, id, time.Now())
 }
 

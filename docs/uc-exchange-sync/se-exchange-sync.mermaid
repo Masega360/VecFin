@@ -1,0 +1,57 @@
+sequenceDiagram
+    actor Usuario
+    participant App as Mobile App (React Native)
+    participant Handler as WalletHandler (Go)
+    participant UC as WalletsUseCase (Go)
+    participant PlatformRepo as PostgresPlatformRepository
+    participant Exchange as BinanceClient (Go)
+    participant Binance as API Binance
+    participant AssetRepo as PostgresAssetWalletRepository
+    participant WalletRepo as PostgresWalletRepository
+
+    Usuario->>App: Toca "Sincronizar" en wallet conectada
+    App->>Handler: HTTP POST /wallets/{id}/sync
+
+    activate Handler
+    Handler->>Handler: Extraer userID del JWT
+    Handler->>UC: SyncFromExchange(ctx, walletID, userID)
+    activate UC
+
+    UC->>WalletRepo: ReadWallet(walletID)
+    WalletRepo-->>UC: Wallet (con APIKey, APISecret, PlatformID)
+
+    UC->>UC: Verificar ownership (wallet.UserID == userID)
+    UC->>UC: Verificar que APIKey y APISecret no sean nil
+
+    UC->>PlatformRepo: GetByID(wallet.PlatformID)
+    PlatformRepo-->>UC: Platform{Name: "binance"}
+
+    UC->>UC: Buscar exchanges["binance"] en registry
+
+    UC->>Exchange: GetHoldings(apiKey, apiSecret)
+    activate Exchange
+    Exchange->>Exchange: Generar firma HMAC-SHA256
+    Exchange->>Binance: HTTP GET /api/v3/account?timestamp=...&signature=...
+    activate Binance
+    Binance-->>Exchange: JSON con balances
+    deactivate Binance
+    Exchange->>Exchange: Filtrar balances > 0
+    Exchange-->>UC: []ExchangeHolding{BTC:0.5, ETH:2.1, ...}
+    deactivate Exchange
+
+    loop Por cada holding
+        UC->>AssetRepo: GetByWalletAndTicker(walletID, ticker)
+        alt Ticker no existe
+            UC->>AssetRepo: Add(walletID, ticker, quantity)
+        else Ticker ya existe
+            UC->>AssetRepo: UpdateQuantity(walletID, ticker, quantity)
+        end
+    end
+
+    UC->>WalletRepo: UpdateLastSync(walletID, now)
+    UC-->>Handler: nil (éxito)
+    deactivate UC
+
+    Handler-->>App: HTTP 204 No Content
+    deactivate Handler
+    App-->>Usuario: Wallet actualizada con holdings de Binance
