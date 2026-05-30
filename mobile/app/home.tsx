@@ -31,12 +31,6 @@ type TabConfig = {
 
 const TABS: TabConfig[] = [
   {
-    id: 'profile',
-    label: 'Perfil',
-    icon: 'person',
-    component: ProfileTab,
-  },
-  {
     id: 'dashboard',
     label: 'Dashboard',
     icon: 'dashboard',
@@ -61,12 +55,6 @@ const TABS: TabConfig[] = [
     component: ExchangesTab,
   },
   {
-    id: 'community',
-    label: 'Comunidad',
-    icon: 'people',
-    component: CommunityTab, 
-  },
-  {
     id: 'simulator',
     label: 'Simulador',
     icon: 'calculate',
@@ -89,6 +77,18 @@ const TABS: TabConfig[] = [
     label: 'Chat IA',
     icon: 'chat',
     component: ChatTab,
+  },
+  {
+    id: 'community',
+    label: 'Comunidad',
+    icon: 'people',
+    component: CommunityTab,
+  },
+  {
+    id: 'profile',
+    label: 'Perfil',
+    icon: 'person',
+    component: ProfileTab,
   },
 ];
 
