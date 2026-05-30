@@ -9,21 +9,37 @@ import (
 )
 
 type platformUsecasePort interface {
+	GetAllPlatforms() ([]domain.Platform, error)
 	SearchPlatform(query string) ([]domain.Platform, error)
 	GetPlatformDetails(id string) (*domain.Platform, error)
 }
 
 type platformHandler struct {
-	uc platformUsecasePort
+	uc                 platformUsecasePort
+	supportedExchanges map[string]bool
 }
 
-func NewPlatformHandler(uc platformUsecasePort) *platformHandler {
-	return &platformHandler{uc: uc}
+func NewPlatformHandler(uc platformUsecasePort, supportedExchanges map[string]bool) *platformHandler {
+	return &platformHandler{uc: uc, supportedExchanges: supportedExchanges}
 }
 
 func (h *platformHandler) RegisterRoutes(jwtSecret string) {
+	http.HandleFunc("GET /platform", h.GetAllPlatforms)
 	http.HandleFunc("GET /platform/search", h.SearchPlatform)
 	http.HandleFunc("GET /platform/{id}", h.GetPlatformDetails)
+}
+
+func (h *platformHandler) GetAllPlatforms(w http.ResponseWriter, r *http.Request) {
+	platforms, err := h.uc.GetAllPlatforms()
+	if err != nil {
+		http.Error(w, "error al obtener plataformas", http.StatusInternalServerError)
+		return
+	}
+	for i := range platforms {
+		platforms[i].SyncSupported = h.supportedExchanges[strings.ToLower(platforms[i].Name)]
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(platforms)
 }
 
 func (h *platformHandler) SearchPlatform(w http.ResponseWriter, r *http.Request) {

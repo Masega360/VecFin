@@ -1,0 +1,5 @@
+Seguir Usuarios
+Crear Transacciones(usuario x compro z btc)
+Mostrar total wallet
+Cuenta privada/publica
+Correcciones sebas

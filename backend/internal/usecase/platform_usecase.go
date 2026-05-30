@@ -12,6 +12,10 @@ func NewPlatformUsecase(repo domain.PlatformRepository) *platformUsecase {
 	return &platformUsecase{repo: repo}
 }
 
+func (u *platformUsecase) GetAllPlatforms() ([]domain.Platform, error) {
+	return u.repo.GetAll()
+}
+
 func (u *platformUsecase) SearchPlatform(query string) ([]domain.Platform, error) {
 	return u.repo.Search(query)
 }

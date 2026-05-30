@@ -22,6 +22,8 @@ func NewClient() *Client {
 	return &Client{http: &http.Client{}}
 }
 
+func (c *Client) Name() string { return "yahoo" }
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 type yahooQuote struct {
@@ -73,6 +75,7 @@ func (c *Client) SearchAssets(query string) ([]domain.Asset, error) {
 			Symbol: q.Symbol,
 			Name:   name,
 			Type:   q.QuoteType,
+			Source: "yahoo",
 		})
 	}
 	return assets, nil
@@ -191,5 +194,6 @@ func (c *Client) GetAssetDetails(symbol, rangeParam string) (*domain.AssetDetail
 		Volume:    m.RegularMarketVolume,
 		MarketCap: m.MarketCap,
 		History:   history,
+		Source:    "yahoo",
 	}, nil
 }

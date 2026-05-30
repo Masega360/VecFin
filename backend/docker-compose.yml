@@ -23,6 +23,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
@@ -31,6 +33,10 @@ services:
       DB_PORT: ${DB_PORT}
       PORT: ${PORT}
       JWT_SECRET: ${JWT_SECRET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - ${USERPROFILE}/.aws:/root/.aws
     ports:
       - "${PORT}:${PORT}"
 
