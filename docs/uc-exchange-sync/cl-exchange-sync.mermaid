@@ -1,0 +1,65 @@
+classDiagram
+    direction TB
+
+    class WalletHandler {
+        -uc WalletUsecasePort
+        +Sync(w http.ResponseWriter, r *http.Request)
+    }
+
+    class WalletUsecasePort {
+        <<interface>>
+        +SyncFromExchange(ctx, id, userID uuid) error
+    }
+
+    class WalletsUseCase {
+        -repo walletRepository
+        -assetsRepo AssetWalletRepository
+        -market MarketService
+        -platformRepo platformRepository
+        -exchanges map[string]ExchangeService
+        +SyncFromExchange(ctx, id, userID uuid) error
+    }
+
+    class ExchangeService {
+        <<interface>>
+        +GetHoldings(apiKey, apiSecret string) ([]ExchangeHolding, error)
+    }
+
+    class BinanceClient {
+        -http *http.Client
+        +GetHoldings(apiKey, apiSecret string) ([]ExchangeHolding, error)
+    }
+
+    class ExchangeHolding {
+        <<struct>>
+        +Ticker string
+        +Quantity float64
+    }
+
+    class platformRepository {
+        <<interface>>
+        +GetByID(id string) (*Platform, error)
+    }
+
+    class Platform {
+        <<struct>>
+        +ID uuid
+        +Name string
+        +Description string
+    }
+
+    class AssetWalletRepository {
+        <<interface>>
+        +Add(ctx, walletID, ticker, quantity) AssetWallet
+        +GetByWalletAndTicker(ctx, walletID, ticker) AssetWallet
+        +UpdateQuantity(ctx, walletID, ticker, quantity) error
+    }
+
+    WalletHandler --> WalletUsecasePort : usa
+    WalletsUseCase ..|> WalletUsecasePort : implementa
+    WalletsUseCase --> ExchangeService : registry map[name]
+    WalletsUseCase --> platformRepository : resuelve nombre
+    WalletsUseCase --> AssetWalletRepository : upsert holdings
+    BinanceClient ..|> ExchangeService : implementa
+    BinanceClient --> ExchangeHolding : retorna
+    platformRepository --> Platform : retorna

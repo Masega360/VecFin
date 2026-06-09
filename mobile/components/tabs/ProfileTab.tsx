@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator,
+  ActivityIndicator, Alert, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL, getValidToken } from '@/utils/api';
+import TokenUsageCard from '@/components/TokenUsageCard';
 
 interface User {
   id: string;
@@ -67,6 +68,40 @@ export default function ProfileTab() {
     }
   };
 
+  const handleExportFiscal = async () => {
+    const token = await getValidToken();
+    if (!token) return;
+    try {
+      if (Platform.OS === 'web') {
+        const res = await fetch(`${API_URL}/users/me/fiscal-report`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) { Alert.alert('Error', 'No se pudo generar el reporte fiscal'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reporte_fiscal.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri = FileSystem.documentDirectory + 'reporte_fiscal.pdf';
+        const res = await FileSystem.downloadAsync(
+          `${API_URL}/users/me/fiscal-report`,
+          fileUri,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.status === 200) {
+          await Sharing.shareAsync(res.uri, { mimeType: 'application/pdf' });
+        } else {
+          Alert.alert('Error', 'No se pudo generar el reporte fiscal');
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Sin conexión al servidor');
+    }
+  };
+
   if (loading) return <ActivityIndicator size="large" color="#00ADD8" style={styles.loader} />;
 
   return (
@@ -97,6 +132,15 @@ export default function ProfileTab() {
         <MaterialIcons name="edit" size={18} color="#fff" />
         <Text style={styles.btnText}>Editar perfil</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={styles.btnExport} onPress={handleExportFiscal}>
+        <MaterialIcons name="description" size={18} color="#fff" />
+        <Text style={styles.btnText}>Exportar reporte fiscal</Text>
+      </TouchableOpacity>
+
+      <View style={{ marginVertical: 12 }}>
+        <TokenUsageCard />
+      </View>
 
       <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
         <MaterialIcons name="logout" size={18} color="#fff" />
@@ -143,6 +187,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#00ADD8', padding: 15, borderRadius: 14, marginBottom: 10,
     shadowColor: '#00ADD8', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+  },
+  btnExport: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#1a5a3a', padding: 15, borderRadius: 14, marginBottom: 10,
+    borderWidth: 1, borderColor: '#2a7a4a',
   },
   btnLogout: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

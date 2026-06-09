@@ -15,6 +15,7 @@ type Asset struct {
 	Symbol string `json:"symbol"`
 	Name   string `json:"name"`
 	Type   string `json:"type"`
+	Source string `json:"source"` // ej: "yahoo", "binance"
 }
 
 // FavAsset representa un activo marcado como favorito por un usuario
@@ -45,9 +46,17 @@ type AssetDetails struct {
 	Volume    int64       `json:"volume"`
 	MarketCap int64       `json:"market_cap"`
 	History   []OHLCPoint `json:"history"`
+	Source    string      `json:"source"`
 }
 
-// MarketService define el contrato que debe cumplir cualquier proveedor de mercado (ej. Yahoo)
+// MarketProvider define el contrato de un proveedor de mercado (Yahoo, Binance, etc.)
+type MarketProvider interface {
+	Name() string
+	SearchAssets(query string) ([]Asset, error)
+	GetAssetDetails(symbol, rangeParam string) (*AssetDetails, error)
+}
+
+// MarketService es el contrato que expone el usecase hacia afuera (handlers)
 type MarketService interface {
 	SearchAssets(query string) ([]Asset, error)
 	GetAssetDetails(symbol, rangeParam string) (*AssetDetails, error)

@@ -38,6 +38,7 @@ interface AssetSuggestion {
   symbol: string;
   name: string;
   type: string;
+  source?: string;
 }
 
 type ScreenView = 'detail' | 'addAsset';
@@ -48,7 +49,8 @@ const formatMoney = (n: number, ccy = 'USD') =>
   new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: ccy || 'USD',
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: Math.abs(n) > 0 && Math.abs(n) < 0.01 ? 6 : 2,
   }).format(n || 0);
 
 const formatQty = (n: number) =>
@@ -153,7 +155,12 @@ export default function WalletDetailScreen() {
         const res = await fetch(`${API_URL}/assets/search?query=${encodeURIComponent(q)}`);
         if (res.ok) {
           const data: AssetSuggestion[] = await res.json();
-          setSuggestions(Array.isArray(data) ? data.slice(0, 8) : []);
+          if (Array.isArray(data) && data.length > 0) {
+            setSuggestions(data.slice(0, 8));
+          } else {
+            // Yahoo no conoce el ticker (ej: activos de Binance) → ofrecerlo directamente
+            setSuggestions([{ symbol: q, name: q, type: 'CRYPTO', source: 'manual' }]);
+          }
         } else {
           setSuggestions([]);
         }
@@ -370,6 +377,11 @@ export default function WalletDetailScreen() {
                       <Text style={styles.suggestBadgeText}>{s.type}</Text>
                     </View>
                   ) : null}
+                  {s.source ? (
+                    <View style={[styles.suggestBadge, s.source === 'binance' ? styles.suggestBadgeBinance : styles.suggestBadgeYahoo]}>
+                      <Text style={styles.suggestBadgeText}>{s.source}</Text>
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               ))}
             </View>
@@ -498,7 +510,9 @@ export default function WalletDetailScreen() {
                     params: {
                       symbol: item.ticker,
                       name: item.name || item.ticker,
-                      from: 'wallets',   // para que el back vuelva a la tab Wallets
+                      from: 'wallets',
+                      fallbackPrice: String(item.price ?? 0),
+                      fallbackCurrency: item.currency ?? 'USD',
                     },
                   })
                 }
@@ -820,6 +834,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3,
     borderWidth: 1, borderColor: '#1e3a5a',
   },
+  suggestBadgeYahoo:   { backgroundColor: '#0a1628', borderColor: '#1e3a5a' },
+  suggestBadgeBinance: { backgroundColor: '#1a1200', borderColor: '#F0B90B40' },
   suggestBadgeText: {
     color: '#8aaabf', fontSize: 10, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 0.5,

@@ -11,6 +11,11 @@ import WalletsTab from '@/components/tabs/WalletsTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import CommunityTab from '@/components/tabs/CommunityTab';
 import SimulatorTab from '@/components/tabs/SimulatorTab';
+import ExchangesTab from '@/components/tabs/ExchangesTab';
+import RecommendationsTab from '@/components/tabs/RecommendationsTab';
+import ChatTab from '@/components/tabs/ChatTab';
+import NewsTab from '@/components/tabs/NewsTab';
+import DashboardTab from '@/components/tabs/DashboardTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -26,10 +31,10 @@ type TabConfig = {
 
 const TABS: TabConfig[] = [
   {
-    id: 'profile',
-    label: 'Perfil',
-    icon: 'person',
-    component: ProfileTab,
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: 'dashboard',
+    component: DashboardTab,
   },
   {
     id: 'assets',
@@ -44,16 +49,46 @@ const TABS: TabConfig[] = [
     component: WalletsTab,
   },
   {
-    id: 'community',
-    label: 'Comunidad',
-    icon: 'people',
-    component: CommunityTab, 
+    id: 'exchanges',
+    label: 'Exchanges',
+    icon: 'swap-horiz',
+    component: ExchangesTab,
   },
   {
     id: 'simulator',
     label: 'Simulador',
     icon: 'calculate',
     component: SimulatorTab,
+  },
+  {
+    id: 'recommendations',
+    label: 'IA',
+    icon: 'auto-awesome',
+    component: RecommendationsTab,
+  },
+  {
+    id: 'news',
+    label: 'Noticias',
+    icon: 'article',
+    component: NewsTab,
+  },
+  {
+    id: 'chat',
+    label: 'Chat IA',
+    icon: 'chat',
+    component: ChatTab,
+  },
+  {
+    id: 'community',
+    label: 'Comunidad',
+    icon: 'people',
+    component: CommunityTab,
+  },
+  {
+    id: 'profile',
+    label: 'Perfil',
+    icon: 'person',
+    component: ProfileTab,
   },
 ];
 

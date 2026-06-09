@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -19,6 +20,8 @@ type Config struct {
 	SMTPPort       int
 	SMTPSender     string
 	SMTPPassword   string
+	GeminiAPIKey   string
+	AWSRegion      string
 }
 
 func Load() *Config {
@@ -40,6 +43,8 @@ func Load() *Config {
 		SMTPPort:       smtpPort,
 		SMTPSender:     os.Getenv("SMTP_SENDER"),
 		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
+		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
+		AWSRegion:      getEnvOrDefault("AWS_REGION", "us-east-1"),
 	}
 }
 
@@ -54,7 +59,7 @@ func (c *Config) Validate() error {
 		return errors.New("PORT no puede estar vacío")
 	}
 	if c.SMTPServer == "" || c.SMTPSender == "" || c.SMTPPassword == "" {
-		return errors.New("faltan configurar las credenciales SMTP en el entorno")
+		fmt.Println("Aviso: credenciales SMTP no configuradas, notificaciones por email deshabilitadas")
 	}
 	return nil
 }

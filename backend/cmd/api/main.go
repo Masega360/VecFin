@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log"
@@ -20,6 +21,12 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/googleauth"
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/infrastructure"
+	"github.com/Masega360/vecfin/backend/internal/platform/aiprovider"
+	"github.com/Masega360/vecfin/backend/internal/platform/bedrock"
+	"github.com/Masega360/vecfin/backend/internal/platform/binance"
+	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
+	"github.com/Masega360/vecfin/backend/internal/platform/news"
+	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -79,20 +86,32 @@ func main() {
 	authHandler.RegisterRoutes()
 
 	yahooClient := yahoo.NewClient()
+	binanceMarket := binance.NewClient()
 	assetRepo := repository.NewPostgresAssetRepository(db)
-	marketUC := usecase.NewMarketUsecase(yahooClient, assetRepo)
+	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket)
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
+	assetCommentRepo := repository.NewPostgresAssetCommentRepository(db)
+	assetCommentHandler := handler.NewAssetCommentHandler(assetCommentRepo)
+	assetCommentHandler.RegisterRoutes(cfg.JWTSecret)
+
 	walletRepo := repository.NewPostgresWalletRepository(db)
 	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient, followUC)
+	platformRepo := repository.NewPostgresPlatformRepository(db)
+	exchanges := map[string]domain.ExchangeService{
+		"binance": binance.NewClient(),
+	}
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
-	platformRepo := repository.NewPostgresPlatformRepository(db)
 	platformUC := usecase.NewPlatformUsecase(platformRepo)
-	platformHandler := handler.NewPlatformHandler(platformUC)
+	supportedExchanges := make(map[string]bool, len(exchanges))
+	for name := range exchanges {
+		supportedExchanges[name] = true
+	}
+	platformHandler := handler.NewPlatformHandler(platformUC, supportedExchanges)
 	platformHandler.RegisterRoutes(cfg.JWTSecret)
 
 	commRepo := repository.NewPostgresCommunityRepository(db)
@@ -121,6 +140,16 @@ func main() {
 	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertUC)
 	priceAlertHandler.RegisterRoutes(cfg.JWTSecret)
 
+	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, marketUC)
+	dashboardHandler := handler.NewDashboardHandler(dashboardUC)
+	dashboardHandler.RegisterRoutes(cfg.JWTSecret)
+
+	pdfGen := pdf.NewFPDFGenerator()
+	tokenRepo := repository.NewPostgresTokenUsageRepository(db)
+	fiscalUC := usecase.NewFiscalReportUsecase(userRepo, walletRepo, assetWalletRepo, marketUC, pdfGen, tokenRepo)
+	fiscalHandler := handler.NewFiscalReportHandler(fiscalUC)
+	fiscalHandler.RegisterRoutes(cfg.JWTSecret)
+
 	smtpConf := infrastructure.SMTPConfig{
 		SMTPServer: cfg.SMTPServer,
 		Port:       cfg.SMTPPort,
@@ -137,6 +166,39 @@ func main() {
 	// Inicia el worker para que consulte precios, por ejemplo, cada 5 minutos.
 	// Esto corre en una goroutine y no bloquea el servidor HTTP.
 	alertWorker.Start(CRON)
+	if cfg.GeminiAPIKey != "" {
+		geminiClient, err := gemini.NewClient(cfg.GeminiAPIKey)
+		if err != nil {
+			log.Fatal("Error inicializando Gemini:", err)
+		}
+
+		// Bedrock como fallback (usa credenciales AWS del entorno)
+		var aiProvider domain.AIProvider = geminiClient
+		bedrockClient, err := bedrock.NewClient(context.Background(), cfg.AWSRegion)
+		if err != nil {
+			log.Printf("Aviso: Bedrock no disponible (%v), usando solo Gemini", err)
+		} else {
+			aiProvider = &aiprovider.Fallback{Primary: geminiClient, Secondary: bedrockClient}
+			log.Println("AI: Gemini (primary) + Bedrock (fallback)")
+		}
+
+		recCacheRepo := repository.NewPostgresRecommendationRepository(db)
+		newsSvc := news.NewService(news.NewClient(""))
+		newsHandler := handler.NewNewsHandler(newsSvc)
+		newsHandler.RegisterRoutes(cfg.JWTSecret)
+
+		chatRepo := repository.NewPostgresChatRepository(db)
+
+		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo, newsSvc, assetRepo, chatRepo)
+		recHandler := handler.NewRecommendationHandler(recUC)
+		recHandler.RegisterRoutes(cfg.JWTSecret)
+
+		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
+		chatHandler := handler.NewChatHandler(chatUC)
+		chatHandler.RegisterRoutes(cfg.JWTSecret)
+	} else {
+		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoints de IA deshabilitados")
+	}
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -147,7 +209,7 @@ func main() {
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: false,
 	})
