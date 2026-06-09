@@ -25,9 +25,10 @@ var ErrInvalidQuantity = errors.New("cantidad inválida: debe ser mayor a cero")
 var ErrInvalidTicker = errors.New("ticker inválido: no puede estar vacío")
 
 type WalletsUseCase struct {
-	repo       walletRepository
-	assetsRepo domain.AssetWalletRepository
-	market     domain.MarketService
+	repo          walletRepository
+	assetsRepo    domain.AssetWalletRepository
+	market        domain.MarketService
+	followUsecase ProfileVisibilityChecker
 }
 
 // NewWalletsUseCase construye el usecase. assetsRepo y market pueden ser nil
@@ -36,8 +37,9 @@ func NewWalletsUseCase(
 	repo walletRepository,
 	assetsRepo domain.AssetWalletRepository,
 	market domain.MarketService,
+	followChecker ProfileVisibilityChecker,
 ) *WalletsUseCase {
-	return &WalletsUseCase{repo: repo, assetsRepo: assetsRepo, market: market}
+	return &WalletsUseCase{repo: repo, assetsRepo: assetsRepo, market: market, followUsecase: followChecker}
 }
 
 func (uc *WalletsUseCase) Create(ctx context.Context, wallet domain.Wallet) (uuid.UUID, error) {
@@ -239,4 +241,23 @@ func (uc *WalletsUseCase) GetWalletDetails(
 		TotalValue: total,
 		Currency:   currency,
 	}, nil
+}
+
+func (uc *WalletsUseCase) ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error) {
+
+	// Verificamos permisos
+	profileVis, err := uc.followUsecase.GetProfileVisibility(viewerID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if !profileVis.CanSeeWallets {
+		return nil, errors.New("no tienes permisos para ver las wallets de este usuario")
+	}
+
+	wallets, err := uc.repo.ListByUser(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	return wallets, nil
 }

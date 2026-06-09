@@ -8,5 +8,9 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     risk_type VARCHAR(50),
     registration_date TIMESTAMP DEFAULT NOW(),
-    last_access TIMESTAMP
+    last_access TIMESTAMP,
+    is_private BOOLEAN DEFAULT false,
+    show_wallets BOOLEAN DEFAULT false,
+    show_communities BOOLEAN DEFAULT false,
+    show_posts BOOLEAN DEFAULT false
 );

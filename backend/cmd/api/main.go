@@ -68,6 +68,11 @@ func main() {
 	userHandler := handler.NewUserHandler(userUC)
 	userHandler.RegisterRoutes(cfg.JWTSecret)
 
+	followRepo := repository.NewPostgresFollowRepository(db)
+	followUC := usecase.NewFollowUsecase(followRepo, userRepo)
+	followHandler := handler.NewFollowHandler(followUC)
+	followHandler.RegisterRoutes(cfg.JWTSecret)
+
 	googleVerifier := googleauth.NewHTTPGoogleVerifier()
 	authUC := usecase.NewAuthUsecase(userRepo, cfg.JWTSecret, googleVerifier)
 	authHandler := handler.NewAuthHandler(authUC)
@@ -81,7 +86,7 @@ func main() {
 
 	walletRepo := repository.NewPostgresWalletRepository(db)
 	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, yahooClient, followUC)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -91,12 +96,12 @@ func main() {
 	platformHandler.RegisterRoutes(cfg.JWTSecret)
 
 	commRepo := repository.NewPostgresCommunityRepository(db)
-	commUC := usecase.NewCommunityUsecase(commRepo)
+	commUC := usecase.NewCommunityUsecase(commRepo, followUC)
 	commHandler := handler.NewCommunityHandler(commUC)
 	commHandler.RegisterRoutes(cfg.JWTSecret)
 
 	postRepo := repository.NewPostgresPostRepository(db)
-	postUC := usecase.NewPostUsecase(postRepo, commRepo)
+	postUC := usecase.NewPostUsecase(postRepo, commRepo, followUC)
 	postHandler := handler.NewPostHandler(postUC)
 	postHandler.RegisterRoutes(cfg.JWTSecret)
 

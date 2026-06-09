@@ -202,3 +202,47 @@ func (r *PostgresPostRepository) DeleteVote(postID, userID uuid.UUID) error {
 	)
 	return err
 }
+
+func (r *PostgresPostRepository) FindByAuthorID(authorID, readerID uuid.UUID) ([]domain.PostResponse, error) {
+	query := `
+        SELECT p.id, p.community_id, p.parent_id, p.author_id, p.title, p.content, p.url,
+               p.upvotes, p.downvotes, p.comment_count, p.created_at, p.updated_at,
+               (u.first_name || ' ' || u.last_name) AS author_name,
+               pv.is_upvote AS user_vote
+        FROM posts p
+        INNER JOIN users u ON p.author_id = u.id
+        LEFT JOIN post_votes pv ON pv.post_id = p.id AND pv.user_id = $2
+        WHERE p.author_id = $1 AND p.parent_id IS NULL
+        ORDER BY p.created_at DESC
+    `
+
+	rows, err := r.db.Query(query, authorID, readerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []domain.PostResponse
+	for rows.Next() {
+		var pr domain.PostResponse
+
+		err := rows.Scan(
+			&pr.ID, &pr.CommunityID, &pr.ParentID, &pr.AuthorID,
+			&pr.Title, &pr.Content, &pr.URL,
+			&pr.Upvotes, &pr.Downvotes, &pr.CommentCount,
+			&pr.CreatedAt, &pr.UpdatedAt,
+			&pr.AuthorName,
+			&pr.UserVote,
+		)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, pr)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}

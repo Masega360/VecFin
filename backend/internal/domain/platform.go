@@ -9,3 +9,8 @@ type Platform struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 }
+
+type PlatformRepository interface {
+	Search(query string) ([]Platform, error)
+	GetByID(id string) (*Platform, error)
+}

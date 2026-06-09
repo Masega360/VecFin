@@ -17,6 +17,7 @@ type User struct {
 	GoogleID         string
 	RiskType         string
 	RegistrationDate time.Time
+	Privacy          PrivacySettings
 }
 
 // UpdateProfile es un método de dominio que controla cómo se modifica un usuario.
@@ -41,4 +42,28 @@ func (u *User) UpdateProfile(firstName, lastName, email string) error {
 // UpdateRiskProfile cambia el perfil de riesgo del usuario
 func (u *User) UpdateRiskProfile(riskType string) {
 	u.RiskType = riskType
+}
+
+func (u *User) UpdatePrivacy(isPrivate, showWallet, showCommunities, showCommunitiesPost bool) {
+	u.Privacy.IsPrivate = isPrivate
+	u.Privacy.ShowWallets = showWallet
+	u.Privacy.ShowCommunities = showCommunities
+	u.Privacy.ShowCommunityPosts = showCommunitiesPost
+}
+
+type PrivacySettings struct {
+	IsPrivate          bool
+	ShowWallets        bool
+	ShowCommunities    bool
+	ShowCommunityPosts bool
+}
+
+type UserRepository interface {
+	Save(user User) error
+	FindByID(id uuid.UUID) (User, error)
+	FindByEmail(email string) (User, error)
+	FindByGoogleID(googleID string) (User, error)
+	Update(user User) error
+	Delete(id uuid.UUID) error
+	FindManyByIDs(ids []uuid.UUID) ([]User, error)
 }

@@ -31,6 +31,7 @@ type PostRepository interface {
 	FindByCommunityID(communityID, readerID uuid.UUID) ([]PostResponse, error)
 	FindRepliesByPostID(parentID, readerID uuid.UUID) ([]PostResponse, error)
 	SearchPostsInCommunity(communityID uuid.UUID, query string) ([]PostResponse, error)
+	FindByAuthorID(authorID, readerID uuid.UUID) ([]PostResponse, error)
 	Update(post Post) error
 	Delete(id uuid.UUID) error
 

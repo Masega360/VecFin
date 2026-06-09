@@ -9,14 +9,16 @@ import (
 )
 
 type PostUsecase struct {
-	postRepo domain.PostRepository
-	commRepo domain.CommunityRepository
+	postRepo      domain.PostRepository
+	commRepo      domain.CommunityRepository
+	followUsecase ProfileVisibilityChecker
 }
 
-func NewPostUsecase(postRepo domain.PostRepository, commRepo domain.CommunityRepository) *PostUsecase {
+func NewPostUsecase(postRepo domain.PostRepository, commRepo domain.CommunityRepository, follow ProfileVisibilityChecker) *PostUsecase {
 	return &PostUsecase{
-		postRepo: postRepo,
-		commRepo: commRepo,
+		postRepo:      postRepo,
+		commRepo:      commRepo,
+		followUsecase: follow,
 	}
 }
 
@@ -179,4 +181,17 @@ func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, qu
 
 func (p *PostUsecase) GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error) {
 	return p.postRepo.FindRepliesByPostID(postID, readerID)
+}
+
+func (p *PostUsecase) ShowPosts(viewerID, targetID uuid.UUID) ([]domain.PostResponse, error) {
+	profileVis, err := p.followUsecase.GetProfileVisibility(viewerID, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !profileVis.CanSeePosts {
+		return nil, errors.New("no tienes permisos para ver los posts de este usuario")
+	}
+
+	return p.postRepo.FindByAuthorID(targetID, viewerID)
 }
