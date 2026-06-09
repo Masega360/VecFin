@@ -22,11 +22,11 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/handler"
 	"github.com/Masega360/vecfin/backend/internal/infrastructure"
 	"github.com/Masega360/vecfin/backend/internal/platform/aiprovider"
-	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
 	"github.com/Masega360/vecfin/backend/internal/platform/bedrock"
 	"github.com/Masega360/vecfin/backend/internal/platform/binance"
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
 	"github.com/Masega360/vecfin/backend/internal/platform/news"
+	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -75,6 +75,11 @@ func main() {
 	userHandler := handler.NewUserHandler(userUC)
 	userHandler.RegisterRoutes(cfg.JWTSecret)
 
+	followRepo := repository.NewPostgresFollowRepository(db)
+	followUC := usecase.NewFollowUsecase(followRepo, userRepo)
+	followHandler := handler.NewFollowHandler(followUC)
+	followHandler.RegisterRoutes(cfg.JWTSecret)
+
 	googleVerifier := googleauth.NewHTTPGoogleVerifier()
 	authUC := usecase.NewAuthUsecase(userRepo, cfg.JWTSecret, googleVerifier)
 	authHandler := handler.NewAuthHandler(authUC)
@@ -97,7 +102,7 @@ func main() {
 	exchanges := map[string]domain.ExchangeService{
 		"binance": binance.NewClient(),
 	}
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -110,12 +115,12 @@ func main() {
 	platformHandler.RegisterRoutes(cfg.JWTSecret)
 
 	commRepo := repository.NewPostgresCommunityRepository(db)
-	commUC := usecase.NewCommunityUsecase(commRepo)
+	commUC := usecase.NewCommunityUsecase(commRepo, followUC)
 	commHandler := handler.NewCommunityHandler(commUC)
 	commHandler.RegisterRoutes(cfg.JWTSecret)
 
 	postRepo := repository.NewPostgresPostRepository(db)
-	postUC := usecase.NewPostUsecase(postRepo, commRepo)
+	postUC := usecase.NewPostUsecase(postRepo, commRepo, followUC)
 	postHandler := handler.NewPostHandler(postUC)
 	postHandler.RegisterRoutes(cfg.JWTSecret)
 

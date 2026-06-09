@@ -26,6 +26,8 @@ type CommunityUsecasePort interface {
 	GetPendingRequests(communityID, moderatorID uuid.UUID) ([]domain.JoinRequest, error)
 	DemoteModerator(communityID, ownerID, targetID uuid.UUID) error
 	TransferOwnership(commID, userID, targetID uuid.UUID) error
+
+	ShowUserCommunities(viewerID, targetID uuid.UUID) ([]domain.Community, error)
 }
 
 type CommunityHandler struct {
@@ -57,6 +59,7 @@ func (h *CommunityHandler) RegisterRoutes(jwtSecret string) {
 	http.HandleFunc("POST /communities/{id}/demote", auth(h.Demote))
 	http.HandleFunc("POST /communities/{id}/transfer", auth(h.Transfer))
 
+	http.HandleFunc("GET /users/{id}/communities", auth(h.GetPublicCommunities))
 }
 
 // ==========================================
@@ -376,4 +379,36 @@ func (h *CommunityHandler) getUserIDFromContext(r *http.Request) (uuid.UUID, err
 		return uuid.Nil, http.ErrNoCookie // O un error genérico
 	}
 	return uuid.Parse(userStr)
+}
+
+func (h *CommunityHandler) GetPublicCommunities(w http.ResponseWriter, r *http.Request) {
+	viewerID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "No autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := r.PathValue("id")
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		http.Error(w, "ID de usuario objetivo inválido", http.StatusBadRequest)
+		return
+	}
+
+	comms, err := h.uc.ShowUserCommunities(viewerID, targetID)
+	if err != nil {
+		if err.Error() == "no tienes permisos para ver las comunidades de este usuario" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if comms == nil {
+		comms = []domain.Community{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(comms)
 }

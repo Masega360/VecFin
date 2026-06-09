@@ -37,7 +37,8 @@ type WalletsUseCase struct {
 	platformRepo platformRepository
 	// exchanges mapea el nombre de la plataforma (lowercase) a su ExchangeService.
 	// Ej: "binance" -> *binance.Client
-	exchanges map[string]domain.ExchangeService
+	exchanges     map[string]domain.ExchangeService
+	followUsecase ProfileVisibilityChecker
 }
 
 // NewWalletsUseCase construye el usecase. assetsRepo y market pueden ser nil
@@ -48,13 +49,15 @@ func NewWalletsUseCase(
 	market domain.MarketService,
 	platformRepo platformRepository,
 	exchanges map[string]domain.ExchangeService,
+	followChecker ProfileVisibilityChecker,
 ) *WalletsUseCase {
 	return &WalletsUseCase{
-		repo:         repo,
-		assetsRepo:   assetsRepo,
-		market:       market,
-		platformRepo: platformRepo,
-		exchanges:    exchanges,
+		repo:          repo,
+		assetsRepo:    assetsRepo,
+		market:        market,
+		platformRepo:  platformRepo,
+		exchanges:     exchanges,
+		followUsecase: followChecker,
 	}
 }
 
@@ -293,4 +296,23 @@ func (uc *WalletsUseCase) GetWalletDetails(
 		TotalValue: total,
 		Currency:   currency,
 	}, nil
+}
+
+func (uc *WalletsUseCase) ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error) {
+
+	// Verificamos permisos
+	profileVis, err := uc.followUsecase.GetProfileVisibility(viewerID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if !profileVis.CanSeeWallets {
+		return nil, errors.New("no tienes permisos para ver las wallets de este usuario")
+	}
+
+	wallets, err := uc.repo.ListByUser(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	return wallets, nil
 }

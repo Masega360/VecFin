@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/middleware"
@@ -26,6 +27,8 @@ type WalletUsecasePort interface {
 	UpdateAssetQuantity(ctx context.Context, walletID, userID uuid.UUID, ticker string, quantity float64) error
 	RemoveAsset(ctx context.Context, walletID, userID uuid.UUID, ticker string) error
 	GetWalletDetails(ctx context.Context, walletID, userID uuid.UUID) (domain.WalletDetails, error)
+
+	ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error) //caso de uso con follow
 }
 
 type WalletHandler struct {
@@ -52,6 +55,8 @@ func (h *WalletHandler) RegisterRoutes(jwtSecret string) {
 	http.HandleFunc("GET /wallets/{id}/assets", auth(h.GetAssets))
 	http.HandleFunc("PUT /wallets/{id}/assets/{ticker}", auth(h.UpdateAsset))
 	http.HandleFunc("DELETE /wallets/{id}/assets/{ticker}", auth(h.RemoveAsset))
+
+	http.HandleFunc("GET /users/{target_id}/wallets", auth(h.GetPublicWallets))
 }
 
 // userIDFromContext extrae y parsea el user_id que dejó el middleware JWT en el contexto.
@@ -449,4 +454,53 @@ func (h *WalletHandler) GetWalletDetails(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(details)
+}
+
+type PublicWalletResponse struct {
+	ID         uuid.UUID `json:"id"`
+	UserID     uuid.UUID `json:"user_id"`
+	PlatformID uuid.UUID `json:"platform_id"`
+	Name       string    `json:"name"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSync   time.Time `json:"last_sync"`
+}
+
+func (h *WalletHandler) GetPublicWallets(w http.ResponseWriter, r *http.Request) {
+	viewerID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := r.PathValue("target_id")
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		http.Error(w, "id de usuario objetivo inválido", http.StatusBadRequest)
+		return
+	}
+
+	wallets, err := h.uc.ShowUserWallets(r.Context(), viewerID, targetID)
+	if err != nil {
+		handleUsecaseErr(w, err)
+		return
+	}
+
+	var res []PublicWalletResponse
+	for _, wllt := range wallets {
+		res = append(res, PublicWalletResponse{
+			ID:         wllt.ID,
+			UserID:     wllt.UserID,
+			PlatformID: wllt.PlatformID,
+			Name:       wllt.Name,
+			CreatedAt:  wllt.CreatedAt,
+			LastSync:   wllt.LastSync,
+		})
+	}
+
+	if res == nil {
+		res = make([]PublicWalletResponse, 0)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
 }

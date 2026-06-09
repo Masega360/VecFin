@@ -9,11 +9,12 @@ import (
 )
 
 type CommunityUsecase struct {
-	repo domain.CommunityRepository
+	repo          domain.CommunityRepository
+	followUsecase ProfileVisibilityChecker
 }
 
-func NewCommunityUsecase(repo domain.CommunityRepository) *CommunityUsecase {
-	return &CommunityUsecase{repo: repo}
+func NewCommunityUsecase(repo domain.CommunityRepository, usecase ProfileVisibilityChecker) *CommunityUsecase {
+	return &CommunityUsecase{repo: repo, followUsecase: usecase}
 }
 
 func (u *CommunityUsecase) CreateCommunity(creatorID uuid.UUID, name, desc, rules, logo string, isPrivate bool) error {
@@ -327,4 +328,19 @@ func (u *CommunityUsecase) DemoteModerator(communityID, ownerID, targetID uuid.U
 	}
 	target.Role = domain.RoleMember
 	return u.repo.UpdateMember(target)
+}
+
+func (u *CommunityUsecase) ShowUserCommunities(viewerID, targetID uuid.UUID) ([]domain.Community, error) {
+	profileVis, err := u.followUsecase.GetProfileVisibility(viewerID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if !profileVis.CanSeeCommunities {
+		return nil, errors.New("no tienes permisos para ver las comunidades de este usuario")
+	}
+	comms, err := u.repo.GetByUserID(targetID)
+	if err != nil {
+		return nil, err
+	}
+	return comms, nil
 }

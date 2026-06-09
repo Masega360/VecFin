@@ -17,6 +17,7 @@ type PostUsecasePort interface {
 	DeletePost(postID, userID uuid.UUID) error
 	SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.PostResponse, error)
 	GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error)
+	ShowPosts(viewerID, targetID uuid.UUID) ([]domain.PostResponse, error)
 }
 
 func (h *PostHandler) RegisterRoutes(jwtSecret string) {
@@ -32,6 +33,7 @@ func (h *PostHandler) RegisterRoutes(jwtSecret string) {
 
 	http.HandleFunc("GET /posts/{id}/replies", auth(h.GetReplies))
 
+	http.HandleFunc("GET /users/{id}/posts", auth(h.ShowPosts))
 }
 
 type PostHandler struct {
@@ -249,4 +251,36 @@ func (h *PostHandler) getUserIDFromContext(r *http.Request) (uuid.UUID, error) {
 		return uuid.Nil, http.ErrNoCookie // O un error genérico
 	}
 	return uuid.Parse(userStr)
+}
+
+func (h *PostHandler) ShowPosts(w http.ResponseWriter, r *http.Request) {
+	viewerID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "No autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := r.PathValue("id")
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		http.Error(w, "ID de usuario objetivo inválido", http.StatusBadRequest)
+		return
+	}
+
+	posts, err := h.uc.ShowPosts(viewerID, targetID)
+	if err != nil {
+		if err.Error() == "no tienes permisos para ver los posts de este usuario" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if posts == nil {
+		posts = []domain.PostResponse{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
 }
