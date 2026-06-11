@@ -182,3 +182,56 @@ func (d *NotificationDispatcher) DispatchRoleChanged(targetID uuid.UUID, communi
 		d.dispatchToChannels(targetID, settings.EnabledChannels, title, message)
 	}()
 }
+
+func (d *NotificationDispatcher) DispatchPostReply(authorID uuid.UUID, postTitle, replierName string) {
+	go func() {
+		settings := d.getSettingsOrDefault(authorID)
+		if !settings.CommunityActivity {
+			return
+		}
+
+		targetStr := "tu publicación"
+		if postTitle != "" {
+			targetStr = fmt.Sprintf("tu post <strong style=\"color: #132238;\">\"%s\"</strong>", postTitle)
+		}
+
+		title := "Nueva respuesta en tu post"
+		message := fmt.Sprintf(`
+           <p style="font-size: 16px;">¡Alguien está interactuando contigo!</p>
+           <p style="font-size: 16px;">El usuario <strong style="color: #00ADD8;">%s</strong> ha dejado un comentario en %s.</p>
+           <p style="font-size: 16px;">Ingresa a VecFin para continuar la conversación.</p>
+       `, replierName, targetStr)
+
+		d.dispatchToChannels(authorID, settings.EnabledChannels, title, message)
+	}()
+}
+
+func (d *NotificationDispatcher) DispatchPostVote(authorID uuid.UUID, postTitle string, isUpvote bool) {
+	go func() {
+		settings := d.getSettingsOrDefault(authorID)
+		if !settings.CommunityActivity {
+			return
+		}
+
+		targetStr := "tu publicación"
+		if postTitle != "" {
+			targetStr = fmt.Sprintf("tu post <strong style=\"color: #132238;\">\"%s\"</strong>", postTitle)
+		}
+
+		accion := "downvote"
+		color := "#ff4d4f"
+
+		if isUpvote {
+			accion = "upvote"
+			color = "#00D26A"
+		}
+
+		title := "Nueva reacción a tu post"
+		message := fmt.Sprintf(`
+           <p style="font-size: 16px;">¡Tu contenido está generando reacciones!</p>
+           <p style="font-size: 16px;">Alguien le ha dado <strong style="color: %s;">%s</strong> a %s.</p>
+       `, color, accion, targetStr)
+
+		d.dispatchToChannels(authorID, settings.EnabledChannels, title, message)
+	}()
+}

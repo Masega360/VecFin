@@ -8,17 +8,33 @@ import (
 	"github.com/google/uuid"
 )
 
+// Definimos la interfaz local para el Dispatcher
+type PostNotificationDispatcher interface {
+	DispatchPostReply(authorID uuid.UUID, postTitle, replierName string)
+	DispatchPostVote(authorID uuid.UUID, postTitle string, isUpvote bool)
+}
+
 type PostUsecase struct {
 	postRepo      domain.PostRepository
 	commRepo      domain.CommunityRepository
+	userRepo      domain.UserRepository
 	followUsecase ProfileVisibilityChecker
+	dispatcher    PostNotificationDispatcher
 }
 
-func NewPostUsecase(postRepo domain.PostRepository, commRepo domain.CommunityRepository, follow ProfileVisibilityChecker) *PostUsecase {
+func NewPostUsecase(
+	postRepo domain.PostRepository,
+	commRepo domain.CommunityRepository,
+	userRepo domain.UserRepository,
+	follow ProfileVisibilityChecker,
+	dispatcher PostNotificationDispatcher,
+) *PostUsecase {
 	return &PostUsecase{
 		postRepo:      postRepo,
 		commRepo:      commRepo,
+		userRepo:      userRepo,
 		followUsecase: follow,
+		dispatcher:    dispatcher,
 	}
 }
 
@@ -50,7 +66,27 @@ func (p *PostUsecase) Create(communityID, authorID uuid.UUID, parentID *uuid.UUI
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	return p.postRepo.Create(post)
+	err := p.postRepo.Create(post)
+	if err != nil {
+		return err
+	}
+
+	if parentID != nil {
+		parentPost, err := p.postRepo.FindByID(*parentID)
+
+		// no se notifica a si mismo
+		if err == nil && parentPost.AuthorID != authorID {
+			replier, errUser := p.userRepo.FindByID(authorID)
+			replierName := "Un usuario"
+			if errUser == nil {
+				replierName = replier.FirstName
+			}
+
+			p.dispatcher.DispatchPostReply(parentPost.AuthorID, parentPost.Title, replierName)
+		}
+	}
+
+	return nil
 }
 
 func (p *PostUsecase) EditPost(postID, authorID uuid.UUID, title, content, url string) error {
@@ -76,10 +112,14 @@ func (p *PostUsecase) VotePost(postID, userID uuid.UUID, isUpvote bool) error {
 		return err
 	}
 
+	isSelfVote := post.AuthorID == userID
+	shouldNotify := false
+
 	existing, err := p.postRepo.FindVote(postID, userID)
 
 	if err != nil {
 		// No tenía voto previo → voto nuevo
+		shouldNotify = true
 		if isUpvote {
 			post.Upvotes++
 		} else {
@@ -90,6 +130,7 @@ func (p *PostUsecase) VotePost(postID, userID uuid.UUID, isUpvote bool) error {
 		}
 	} else if existing.IsUpvote == isUpvote {
 		// Toggle: mismo voto → quitar
+		shouldNotify = false
 		if isUpvote {
 			post.Upvotes--
 		} else {
@@ -100,6 +141,7 @@ func (p *PostUsecase) VotePost(postID, userID uuid.UUID, isUpvote bool) error {
 		}
 	} else {
 		// Cambio de voto: up→down o down→up
+		shouldNotify = true
 		if isUpvote {
 			post.Upvotes++
 			post.Downvotes--
@@ -120,7 +162,12 @@ func (p *PostUsecase) VotePost(postID, userID uuid.UUID, isUpvote bool) error {
 		post.Downvotes = 0
 	}
 
-	return p.postRepo.Update(post)
+	err = p.postRepo.Update(post)
+
+	if err == nil && shouldNotify && !isSelfVote {
+		p.dispatcher.DispatchPostVote(post.AuthorID, post.Title, isUpvote)
+	}
+	return err
 }
 
 func (p *PostUsecase) DeletePost(postID, userID uuid.UUID) error {

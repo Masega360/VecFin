@@ -133,12 +133,12 @@ func main() {
 	platformHandler.RegisterRoutes(cfg.JWTSecret)
 
 	commRepo := repository.NewPostgresCommunityRepository(db)
-	commUC := usecase.NewCommunityUsecase(commRepo, followUC)
+	commUC := usecase.NewCommunityUsecase(commRepo, userRepo, followUC, dispatcher)
 	commHandler := handler.NewCommunityHandler(commUC)
 	commHandler.RegisterRoutes(cfg.JWTSecret)
 
 	postRepo := repository.NewPostgresPostRepository(db)
-	postUC := usecase.NewPostUsecase(postRepo, commRepo, followUC)
+	postUC := usecase.NewPostUsecase(postRepo, commRepo, userRepo, followUC, dispatcher)
 	postHandler := handler.NewPostHandler(postUC)
 	postHandler.RegisterRoutes(cfg.JWTSecret)
 

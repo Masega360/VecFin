@@ -288,6 +288,7 @@ func (u *CommunityUsecase) PromoteToOwner(communityID, currentOwnerID, newOwnerI
 	}
 	return err
 }
+
 func (u *CommunityUsecase) GetUserCommunities(userID uuid.UUID) ([]domain.Community, error) {
 	return u.repo.GetByUserID(userID)
 }
