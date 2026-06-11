@@ -15,6 +15,10 @@ type SMTPConfig struct {
 	Password   string
 }
 
+type NotificationProvider interface {
+	Send(userID uuid.UUID, title, message string) error
+}
+
 type EmailService struct {
 	UserRepo domain.UserRepository
 	Config   SMTPConfig

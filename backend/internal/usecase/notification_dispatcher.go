@@ -2,25 +2,28 @@ package usecase
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
+	"github.com/Masega360/vecfin/backend/internal/infrastructure"
+	"github.com/google/uuid"
 )
 
 type NotificationDispatcher struct {
 	settingsRepo domain.NotificationSettingsRepository
 	// Un mapa que relaciona cada canal (EMAIL, SMS) con su proveedor real
-	providers map[domain.ChannelPreference]domain.NotificationProvider
+	providers map[domain.ChannelPreference]infrastructure.NotificationProvider
 }
 
 func NewNotificationDispatcher(sRepo domain.NotificationSettingsRepository) *NotificationDispatcher {
 	return &NotificationDispatcher{
 		settingsRepo: sRepo,
-		providers:    make(map[domain.ChannelPreference]domain.NotificationProvider),
+		providers:    make(map[domain.ChannelPreference]infrastructure.NotificationProvider),
 	}
 }
 
 // Permite "conectar" nuevos canales al sistema fácilmente
-func (d *NotificationDispatcher) RegisterProvider(channel domain.ChannelPreference, provider domain.NotificationProvider) {
+func (d *NotificationDispatcher) RegisterProvider(channel domain.ChannelPreference, provider infrastructure.NotificationProvider) {
 	d.providers[channel] = provider
 }
 
@@ -41,7 +44,7 @@ func (d *NotificationDispatcher) DispatchPriceAlert(alert domain.PriceAlert, cur
 	}
 
 	// 2. Armar el mensaje base genérico (sirve para Mail, App y SMS)
-	title := fmt.Sprintf("vecFin - Alerta de %s", alert.Symbol)
+	title := fmt.Sprintf("VecFin - Alerta de %s", alert.Symbol)
 	// Armamos el "relleno" específico para la alerta de precios
 	// Fíjate que armamos una pequeña tarjeta gris para resaltar los precios
 	message := fmt.Sprintf(`
@@ -76,4 +79,38 @@ func (d *NotificationDispatcher) DispatchPriceAlert(alert domain.PriceAlert, cur
 	}
 
 	return nil
+}
+
+func (d *NotificationDispatcher) DispatchFollowRequest(targetUserID uuid.UUID, followerName string) {
+	go func() {
+		settings, err := d.settingsRepo.GetByUserID(targetUserID)
+		if err != nil {
+			if err.Error() != "not found" {
+				log.Printf("Error obteniendo settings para follow: %v", err)
+				return
+			}
+			settings.EnabledChannels = []domain.ChannelPreference{domain.ChannelEmail}
+			settings.FollowRequests = true
+		}
+
+		if !settings.FollowRequests {
+			return
+		}
+
+		title := "Nueva solicitud de seguimiento en VecFin"
+		message := fmt.Sprintf(`
+           <p style="font-size: 16px;">¡Tienes una nueva solicitud de seguimiento!</p>
+           <p style="font-size: 16px;">El usuario <strong style="color: #00ADD8; font-size: 18px;">%s</strong> ha solicitado seguirte</p>
+           <p style="font-size: 16px;">Ingresa a la aplicación para aceptar o rechazar esta solicitud en tu panel de notificaciones.</p>
+       `, followerName)
+
+		for _, channel := range settings.EnabledChannels {
+			if provider, exists := d.providers[channel]; exists {
+				err := provider.Send(targetUserID, title, message)
+				if err != nil {
+					log.Printf("Error enviando notificación de follow por canal %s: %v\n", channel, err)
+				}
+			}
+		}
+	}()
 }

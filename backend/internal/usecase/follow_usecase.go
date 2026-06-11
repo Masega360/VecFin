@@ -2,26 +2,36 @@ package usecase
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/google/uuid"
 )
 
+type FollowNotificationDispatcher interface {
+	DispatchFollowRequest(targetUserID uuid.UUID, followerName string)
+}
+
 type FollowUsecase struct {
 	followRepo domain.FollowRepository
 	userRepo   domain.UserRepository
+	dispatcher FollowNotificationDispatcher
 }
 
-func NewFollowUsecase(followRepo domain.FollowRepository, userRepo domain.UserRepository) *FollowUsecase {
+func NewFollowUseCase(
+	repo domain.FollowRepository,
+	userRepo domain.UserRepository,
+	dispatcher FollowNotificationDispatcher,
+) *FollowUsecase {
 	return &FollowUsecase{
-		followRepo: followRepo,
+		followRepo: repo,
 		userRepo:   userRepo,
+		dispatcher: dispatcher,
 	}
 }
 
 func (u *FollowUsecase) FollowUser(followerID, targetID uuid.UUID) error {
-
 	if followerID == targetID {
 		return errors.New("no puedes seguirte a ti mismo")
 	}
@@ -36,14 +46,45 @@ func (u *FollowUsecase) FollowUser(followerID, targetID uuid.UUID) error {
 		status = domain.FollowStatusPending
 	}
 
-	follow := domain.FollowRelationship{
-		FollowerID:  followerID,
-		FollowingID: targetID,
-		Status:      status,
-		CreatedAt:   time.Now(),
+	existingRel, err := u.followRepo.GetRelationship(followerID, targetID)
+
+	if err == nil {
+		switch existingRel.Status {
+		case domain.FollowStatusPending:
+			return errors.New("ya has enviado una solicitud a este usuario")
+		case domain.FollowStatusApproved:
+			return errors.New("ya sigues a este usuario")
+		case domain.FollowStatusCanceled:
+			tiempoTranscurrido := time.Since(existingRel.UpdatedAt)
+			tiempoRequerido := 24 * time.Hour
+
+			if tiempoTranscurrido < tiempoRequerido {
+				faltan := (tiempoRequerido - tiempoTranscurrido).Hours()
+				return fmt.Errorf("debes esperar %.0f horas para volver a enviar una solicitud", faltan)
+			}
+
+			err = u.followRepo.UpdateStatus(followerID, targetID, status)
+		}
+	} else {
+		follow := domain.FollowRelationship{
+			FollowerID:  followerID,
+			FollowingID: targetID,
+			Status:      status,
+			CreatedAt:   time.Now(),
+		}
+		err = u.followRepo.Create(follow)
 	}
 
-	return u.followRepo.Create(follow)
+	if err != nil {
+		return err
+	}
+
+	if status == domain.FollowStatusPending {
+		follower, _ := u.userRepo.FindByID(followerID)
+		u.dispatcher.DispatchFollowRequest(targetID, follower.FirstName)
+	}
+
+	return nil
 }
 
 type ProfileVisibility struct {
@@ -100,19 +141,19 @@ func (u *FollowUsecase) AcceptFollowRequest(ownerID, followerID uuid.UUID) error
 
 func (u *FollowUsecase) RejectFollowRequest(ownerID, followerID uuid.UUID) error {
 	status, err := u.followRepo.CheckStatus(followerID, ownerID)
-
 	if err != nil {
 		return err
 	}
 
 	if status != domain.FollowStatusPending {
-		return errors.New("la solicitud no esta pendiente")
+		return errors.New("la solicitud no está pendiente")
 	}
-	return u.followRepo.Delete(followerID, ownerID)
+
+	return u.followRepo.UpdateStatus(followerID, ownerID, domain.FollowStatusCanceled)
 }
 
 func (u *FollowUsecase) UnfollowUser(followerID, targetID uuid.UUID) error {
-	return u.followRepo.Delete(followerID, targetID)
+	return u.followRepo.UpdateStatus(followerID, targetID, domain.FollowStatusCanceled)
 }
 
 func (u *FollowUsecase) GetFollowers(targetID uuid.UUID) ([]domain.User, error) {

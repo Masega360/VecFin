@@ -20,6 +20,7 @@ type NotificationSetting struct {
 	CommunityActivity bool `json:"community_activity"`
 	NewMembers        bool `json:"new_members"`
 	Marketing         bool `json:"marketing"` // alguna promocion extra o algo asi
+	FollowRequests    bool `json:"follow_requests"`
 
 	// Por donde lo quiere recibir
 	EnabledChannels []ChannelPreference `json:"enabled_channels"`

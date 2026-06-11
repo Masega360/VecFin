@@ -29,7 +29,7 @@ func (r *PostgresFollowRepository) Create(follow domain.FollowRelationship) erro
 func (r *PostgresFollowRepository) UpdateStatus(followerID, followingID uuid.UUID, status domain.FollowStatus) error {
 	query := `
        UPDATE follows
-       SET status = $1
+       SET status = $1, updated_at = NOW()
        WHERE follower_id = $2 AND following_id = $3
     `
 	res, err := r.db.Exec(query, status, followerID, followingID)
@@ -137,4 +137,26 @@ func (r *PostgresFollowRepository) GetFollowingIDs(
 	}
 
 	return ids, nil
+}
+
+func (r *PostgresFollowRepository) GetRelationship(followerID, followingID uuid.UUID) (domain.FollowRelationship, error) {
+	var follow domain.FollowRelationship
+	query := ` SELECT follower_id,
+           following_id,
+           status,
+           created_at,
+           updated_at
+    FROM follows
+    WHERE follower_id = $1 AND following_id = $2`
+
+	err := r.db.QueryRow(query, followerID, followingID).Scan(
+		&follow.FollowerID, &follow.FollowingID, &follow.Status, &follow.CreatedAt, &follow.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return domain.FollowRelationship{}, errors.New("no existe relación de seguimiento")
+		}
+		return domain.FollowRelationship{}, err
+	}
+
+	return follow, nil
 }

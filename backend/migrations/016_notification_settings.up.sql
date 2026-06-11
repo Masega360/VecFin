@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS notification_settings (
     community_activity BOOLEAN NOT NULL DEFAULT true,
     new_members BOOLEAN NOT NULL DEFAULT false,
     marketing BOOLEAN NOT NULL DEFAULT false,
+    follow_request BOOLEAN NOT NULL DEFAULT true,
 
     enabled_channels TEXT[] NOT NULL DEFAULT '{"EMAIL", "IN_APP"}',
 

@@ -26,6 +26,7 @@ func (uc *NotificationSettingUseCase) GetSettings(userID uuid.UUID) (domain.Noti
 				CommunityActivity: true,
 				NewMembers:        false,
 				Marketing:         false,
+				FollowRequests:    true,
 				EnabledChannels:   []domain.ChannelPreference{domain.ChannelEmail, domain.ChannelInApp},
 			}, nil
 		}

@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS follows (
     following_id UUID NOT NULL,
     status VARCHAR(20) NOT NULL, -- 'pending' o 'approved'
     created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
 
     PRIMARY KEY (follower_id, following_id),
 

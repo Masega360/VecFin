@@ -26,7 +26,7 @@ func (r *PostgresNotificationSettingsRepository) Create(setting domain.Notificat
 
 	query := `
        INSERT INTO notification_settings 
-       (user_id, price_alerts, community_activity, new_members, marketing, enabled_channels)
+       (user_id, price_alerts, community_activity, new_members, marketing, follow_request, enabled_channels)
        VALUES ($1, $2, $3, $4, $5, $6)
     `
 	_, err := r.db.Exec(query,
@@ -35,6 +35,7 @@ func (r *PostgresNotificationSettingsRepository) Create(setting domain.Notificat
 		setting.CommunityActivity,
 		setting.NewMembers,
 		setting.Marketing,
+		setting.FollowRequests,
 		pq.Array(strChannels),
 	)
 	return err
@@ -45,7 +46,7 @@ func (r *PostgresNotificationSettingsRepository) GetByUserID(userID uuid.UUID) (
 	var strChannels []string // Leemos la DB en un []string nativo
 
 	query := `
-       SELECT user_id, price_alerts, community_activity, new_members, marketing, enabled_channels
+       SELECT user_id, price_alerts, community_activity, new_members, marketing, follow_request, enabled_channels
        FROM notification_settings 
        WHERE user_id = $1
     `
@@ -55,6 +56,7 @@ func (r *PostgresNotificationSettingsRepository) GetByUserID(userID uuid.UUID) (
 		&setting.CommunityActivity,
 		&setting.NewMembers,
 		&setting.Marketing,
+		&setting.FollowRequests,
 		pq.Array(&strChannels), // Escaneamos el TEXT[] hacia el []string
 	)
 
@@ -86,14 +88,16 @@ func (r *PostgresNotificationSettingsRepository) Update(setting domain.Notificat
            community_activity = $2, 
            new_members = $3, 
            marketing = $4, 
-           enabled_channels = $5
-       WHERE user_id = $6
+           follow_request = $5,
+           enabled_channels = $6
+       WHERE user_id = $7
     `
 	res, err := r.db.Exec(query,
 		setting.PriceAlerts,
 		setting.CommunityActivity,
 		setting.NewMembers,
 		setting.Marketing,
+		setting.FollowRequests,
 		pq.Array(strChannels),
 		setting.UserID,
 	)
