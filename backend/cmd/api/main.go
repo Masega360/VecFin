@@ -75,8 +75,26 @@ func main() {
 	userHandler := handler.NewUserHandler(userUC)
 	userHandler.RegisterRoutes(cfg.JWTSecret)
 
+	settingsRepo := repository.NewPostgresNotificationSettingsRepository(db)
+	priceAlertRepo := repository.NewPostgresPriceAlertRepository(db)
+
+	settingsUC := usecase.NewNotificationSettingUsecase(settingsRepo)
+	settingsHandler := handler.NewNotificationSettingHandler(settingsUC)
+	settingsHandler.RegisterRoutes(cfg.JWTSecret)
+
+	smtpConf := infrastructure.SMTPConfig{
+		SMTPServer: cfg.SMTPServer,
+		Port:       cfg.SMTPPort,
+		Sender:     cfg.SMTPSender,
+		Password:   cfg.SMTPPassword,
+	}
+	emailProvider := infrastructure.NewEmailService(userRepo, smtpConf)
+
+	dispatcher := usecase.NewNotificationDispatcher(settingsRepo)
+	dispatcher.RegisterProvider(domain.ChannelEmail, emailProvider)
+
 	followRepo := repository.NewPostgresFollowRepository(db)
-	followUC := usecase.NewFollowUsecase(followRepo, userRepo)
+	followUC := usecase.NewFollowUseCase(followRepo, userRepo, dispatcher)
 	followHandler := handler.NewFollowHandler(followUC)
 	followHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -129,13 +147,6 @@ func main() {
 	simulatorHandler := handler.NewSimulatorHandler(simulatorUC)
 	simulatorHandler.RegisterRoutes(cfg.JWTSecret)
 
-	settingsRepo := repository.NewPostgresNotificationSettingsRepository(db)
-	priceAlertRepo := repository.NewPostgresPriceAlertRepository(db)
-
-	settingsUC := usecase.NewNotificationSettingUsecase(settingsRepo)
-	settingsHandler := handler.NewNotificationSettingHandler(settingsUC)
-	settingsHandler.RegisterRoutes(cfg.JWTSecret)
-
 	priceAlertUC := usecase.NewPriceAlertUsecase(priceAlertRepo)
 	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertUC)
 	priceAlertHandler.RegisterRoutes(cfg.JWTSecret)
@@ -149,17 +160,6 @@ func main() {
 	fiscalUC := usecase.NewFiscalReportUsecase(userRepo, walletRepo, assetWalletRepo, marketUC, pdfGen, tokenRepo)
 	fiscalHandler := handler.NewFiscalReportHandler(fiscalUC)
 	fiscalHandler.RegisterRoutes(cfg.JWTSecret)
-
-	smtpConf := infrastructure.SMTPConfig{
-		SMTPServer: cfg.SMTPServer,
-		Port:       cfg.SMTPPort,
-		Sender:     cfg.SMTPSender,
-		Password:   cfg.SMTPPassword,
-	}
-	emailProvider := infrastructure.NewEmailService(userRepo, smtpConf)
-
-	dispatcher := usecase.NewNotificationDispatcher(settingsRepo)
-	dispatcher.RegisterProvider(domain.ChannelEmail, emailProvider)
 
 	alertWorker := worker.NewPriceAlertWorker(priceAlertRepo, yahooClient, dispatcher)
 

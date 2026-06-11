@@ -8,13 +8,32 @@ import (
 	"github.com/google/uuid"
 )
 
-type CommunityUsecase struct {
-	repo          domain.CommunityRepository
-	followUsecase ProfileVisibilityChecker
+type CommunityNotificationDispatcher interface {
+	DispatchNewMemberRequest(adminIDs []uuid.UUID, communityName, applicantName string)
+	DispatchJoinRequestResolved(applicantID uuid.UUID, communityName string, approved bool)
+	DispatchMemberKicked(targetID uuid.UUID, communityName string)
+	DispatchRoleChanged(targetID uuid.UUID, communityName, newRole string)
 }
 
-func NewCommunityUsecase(repo domain.CommunityRepository, usecase ProfileVisibilityChecker) *CommunityUsecase {
-	return &CommunityUsecase{repo: repo, followUsecase: usecase}
+type CommunityUsecase struct {
+	repo          domain.CommunityRepository
+	userRepo      domain.UserRepository
+	followUsecase ProfileVisibilityChecker
+	dispatcher    CommunityNotificationDispatcher
+}
+
+func NewCommunityUsecase(
+	repo domain.CommunityRepository,
+	userRepo domain.UserRepository,
+	followUsecase ProfileVisibilityChecker,
+	dispatcher CommunityNotificationDispatcher,
+) *CommunityUsecase {
+	return &CommunityUsecase{
+		repo:          repo,
+		userRepo:      userRepo,
+		followUsecase: followUsecase,
+		dispatcher:    dispatcher,
+	}
 }
 
 func (u *CommunityUsecase) CreateCommunity(creatorID uuid.UUID, name, desc, rules, logo string, isPrivate bool) error {
@@ -61,7 +80,6 @@ func (u *CommunityUsecase) CreateCommunity(creatorID uuid.UUID, name, desc, rule
 }
 
 func (u *CommunityUsecase) JoinCommunity(communityID, userID uuid.UUID) error {
-	// Verifica si ya es miembro (para no duplicarlo)
 	if _, err := u.repo.FindMember(communityID, userID); err == nil {
 		return errors.New("El usuario ya pertenece a esta comunidad")
 	}
@@ -75,13 +93,34 @@ func (u *CommunityUsecase) JoinCommunity(communityID, userID uuid.UUID) error {
 		if req, err := u.repo.GetJoinRequest(communityID, userID); err == nil && req.Status == domain.StatusPending {
 			return errors.New("Ya tenes una solisitud pendiente")
 		}
+
 		request := domain.JoinRequest{
 			CommunityID: communityID,
 			UserID:      userID,
 			Status:      domain.StatusPending,
 			CreatedAt:   time.Now(),
 		}
-		return u.repo.CreateJoinRequest(request)
+
+		if err := u.repo.CreateJoinRequest(request); err != nil {
+			return err
+		}
+
+		applicant, _ := u.userRepo.FindByID(userID)
+
+		members, _ := u.repo.GetMembers(communityID)
+		var adminIDs []uuid.UUID
+		for _, m := range members {
+			if m.Role == domain.RoleOwner || m.Role == domain.RoleModerator {
+				adminIDs = append(adminIDs, m.UserID)
+			}
+		}
+
+		if len(adminIDs) > 0 {
+			u.dispatcher.DispatchNewMemberRequest(adminIDs, comm.Name, applicant.FirstName)
+		}
+
+		return nil
+
 	} else {
 		// si cm es public
 		member := domain.CommunityMember{
@@ -135,12 +174,16 @@ func (u *CommunityUsecase) ResolveJoinRequest(communityID, moderatorID, applican
 		return errors.New("no hay una solicitud pendiente para este usuario")
 	}
 
-	// Rechazar
+	comm, _ := u.repo.FindByID(communityID)
+
 	if !approve {
-		return u.repo.UpdateJoinRequestStatus(communityID, applicantID, domain.StatusRejected)
+		err := u.repo.UpdateJoinRequestStatus(communityID, applicantID, domain.StatusRejected)
+		if err == nil {
+			u.dispatcher.DispatchJoinRequestResolved(applicantID, comm.Name, false)
+		}
+		return err
 	}
 
-	// Aprobar
 	if err := u.repo.UpdateJoinRequestStatus(communityID, applicantID, domain.StatusApproved); err != nil {
 		return err
 	}
@@ -155,9 +198,14 @@ func (u *CommunityUsecase) ResolveJoinRequest(communityID, moderatorID, applican
 	if err := u.repo.AddMember(newMember); err != nil {
 		return err
 	}
-	comm, _ := u.repo.FindByID(communityID)
+
 	comm.MemberCount++
-	return u.repo.Update(comm)
+	err = u.repo.Update(comm)
+
+	if err == nil {
+		u.dispatcher.DispatchJoinRequestResolved(applicantID, comm.Name, true)
+	}
+	return err
 }
 
 func (u *CommunityUsecase) KickMember(communityID, initiatorID, targetID uuid.UUID) error {
@@ -181,7 +229,12 @@ func (u *CommunityUsecase) KickMember(communityID, initiatorID, targetID uuid.UU
 
 	comm, _ := u.repo.FindByID(communityID)
 	comm.MemberCount--
-	return u.repo.Update(comm)
+	err = u.repo.Update(comm)
+
+	if err == nil {
+		u.dispatcher.DispatchMemberKicked(targetID, comm.Name)
+	}
+	return err
 }
 
 func (u *CommunityUsecase) TransferOwnership(communityID, currentOwnerID, newOwnerID uuid.UUID) error {
@@ -202,7 +255,14 @@ func (u *CommunityUsecase) TransferOwnership(communityID, currentOwnerID, newOwn
 	if err := u.repo.UpdateMember(currentOwner); err != nil {
 		return err
 	}
-	return u.repo.UpdateMember(newOwner)
+
+	err = u.repo.UpdateMember(newOwner)
+
+	if err == nil {
+		comm, _ := u.repo.FindByID(communityID)
+		u.dispatcher.DispatchRoleChanged(newOwnerID, comm.Name, string(domain.RoleOwner))
+	}
+	return err
 }
 
 func (u *CommunityUsecase) PromoteToOwner(communityID, currentOwnerID, newOwnerID uuid.UUID) error {
@@ -220,9 +280,14 @@ func (u *CommunityUsecase) PromoteToOwner(communityID, currentOwnerID, newOwnerI
 		return err
 	}
 
-	return u.repo.UpdateMember(newOwner)
-}
+	err = u.repo.UpdateMember(newOwner)
 
+	if err == nil {
+		comm, _ := u.repo.FindByID(communityID)
+		u.dispatcher.DispatchRoleChanged(newOwnerID, comm.Name, string(domain.RoleOwner))
+	}
+	return err
+}
 func (u *CommunityUsecase) GetUserCommunities(userID uuid.UUID) ([]domain.Community, error) {
 	return u.repo.GetByUserID(userID)
 }

@@ -192,6 +192,8 @@ func (r *PostgresCommunityRepository) CreateJoinRequest(req domain.JoinRequest) 
 	query := `
         INSERT INTO community_join_requests (community_id, user_id, status, created_at)
         VALUES ($1, $2, $3, $4)
+        ON CONFLICT (community_id, user_id) 
+        DO UPDATE SET status = EXCLUDED.status, created_at = EXCLUDED.created_at
     `
 	_, err := r.db.Exec(query, req.CommunityID, req.UserID, req.Status, req.CreatedAt)
 	return err
