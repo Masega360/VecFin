@@ -90,8 +90,16 @@ func main() {
 	}
 	emailProvider := infrastructure.NewEmailService(userRepo, smtpConf)
 
+	inAppRepo := repository.NewPostgresInAppNotificationRepository(db)
+	inAppProvider := infrastructure.NewInAppService(inAppRepo)
+
 	dispatcher := usecase.NewNotificationDispatcher(settingsRepo)
 	dispatcher.RegisterProvider(domain.ChannelEmail, emailProvider)
+	dispatcher.RegisterProvider(domain.ChannelInApp, inAppProvider)
+
+	inAppUC := usecase.NewInAppNotificationUsecase(inAppRepo)
+	inAppHandler := handler.NewInAppNotificationHandler(inAppUC)
+	inAppHandler.RegisterRoutes(cfg.JWTSecret)
 
 	followRepo := repository.NewPostgresFollowRepository(db)
 	followUC := usecase.NewFollowUseCase(followRepo, userRepo, dispatcher)
