@@ -15,13 +15,27 @@ type User struct {
 	Email            string
 	PasswordHash     string
 	GoogleID         string
-	RiskType         string
+	RiskType         RiskType
 	RegistrationDate time.Time
 	Privacy          PrivacySettings
 }
 
-// UpdateProfile es un método de dominio que controla cómo se modifica un usuario.
-// Aquí centralizamos las reglas de negocio (ej. validaciones).
+type PrivacySettings struct {
+	IsPrivate          bool `json:"is_private"`
+	ShowWallets        bool `json:"show_wallets"`
+	ShowCommunities    bool `json:"show_communities"`
+	ShowCommunityPosts bool `json:"show_community_posts"`
+}
+
+type RiskType string
+
+const (
+	ConservativeRisk RiskType = "conservative"
+	ModerateRisk     RiskType = "moderate"
+	AggressiveRisk   RiskType = "aggressive"
+)
+
+// UpdateProfile actualiza solo datos personales
 func (u *User) UpdateProfile(firstName, lastName, email string) error {
 	if firstName == "" || lastName == "" {
 		return errors.New("el nombre y el apellido no pueden estar vacíos")
@@ -39,23 +53,21 @@ func (u *User) UpdateProfile(firstName, lastName, email string) error {
 	return nil
 }
 
-// UpdateRiskProfile cambia el perfil de riesgo del usuario
-func (u *User) UpdateRiskProfile(riskType string) {
+// UpdateRiskProfile cambia el perfil de riesgo
+func (u *User) UpdateRiskProfile(riskType RiskType) error {
+	if riskType != ConservativeRisk && riskType != ModerateRisk && riskType != AggressiveRisk {
+		return errors.New("perfil de riesgo inválido")
+	}
 	u.RiskType = riskType
+	return nil
 }
 
+// UpdatePrivacy actualiza las configuraciones de privacidad juntas
 func (u *User) UpdatePrivacy(isPrivate, showWallet, showCommunities, showCommunitiesPost bool) {
 	u.Privacy.IsPrivate = isPrivate
 	u.Privacy.ShowWallets = showWallet
 	u.Privacy.ShowCommunities = showCommunities
 	u.Privacy.ShowCommunityPosts = showCommunitiesPost
-}
-
-type PrivacySettings struct {
-	IsPrivate          bool
-	ShowWallets        bool
-	ShowCommunities    bool
-	ShowCommunityPosts bool
 }
 
 type UserRepository interface {

@@ -43,6 +43,7 @@ func (u *UserUsecase) Create(firstName, lastName, email, password string) error 
 		LastName:         lastName,
 		Email:            email,
 		PasswordHash:     string(hash),
+		RiskType:         domain.ConservativeRisk,
 		RegistrationDate: time.Now(),
 	}
 
@@ -54,11 +55,18 @@ func (u *UserUsecase) Read(id string) (domain.User, error) {
 	if err != nil {
 		return domain.User{}, err
 	}
-	// Usamos FindByID
 	return u.repo.FindByID(uid)
 }
 
-func (u *UserUsecase) Update(id, firstName, lastName, email string) error {
+func (u *UserUsecase) Delete(id string) error {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return err
+	}
+	return u.repo.Delete(uid)
+}
+
+func (u *UserUsecase) UpdateProfile(id, firstName, lastName, email string) error {
 	uid, err := uuid.Parse(id)
 	if err != nil {
 		return err
@@ -77,10 +85,36 @@ func (u *UserUsecase) Update(id, firstName, lastName, email string) error {
 	return u.repo.Update(existingUser)
 }
 
-func (u *UserUsecase) Delete(id string) error {
+func (u *UserUsecase) UpdateRiskProfile(id string, riskType string) error {
 	uid, err := uuid.Parse(id)
 	if err != nil {
 		return err
 	}
-	return u.repo.Delete(uid)
+
+	existingUser, err := u.repo.FindByID(uid)
+	if err != nil {
+		return err
+	}
+
+	if err := existingUser.UpdateRiskProfile(domain.RiskType(riskType)); err != nil {
+		return err
+	}
+
+	return u.repo.Update(existingUser)
+}
+
+func (u *UserUsecase) UpdatePrivacy(id string, isPrivate, showWallet, showCommunities, showCommunitiesPost bool) error {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return err
+	}
+
+	existingUser, err := u.repo.FindByID(uid)
+	if err != nil {
+		return err
+	}
+
+	existingUser.UpdatePrivacy(isPrivate, showWallet, showCommunities, showCommunitiesPost)
+
+	return u.repo.Update(existingUser)
 }

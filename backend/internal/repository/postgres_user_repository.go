@@ -102,10 +102,7 @@ func (r *PostgresUserRepository) Delete(id uuid.UUID) error {
 	return err
 }
 
-func (r *PostgresUserRepository) FindManyByIDs(
-	ids []uuid.UUID,
-) ([]domain.User, error) {
-
+func (r *PostgresUserRepository) FindManyByIDs(ids []uuid.UUID) ([]domain.User, error) {
 	if len(ids) == 0 {
 		return []domain.User{}, nil
 	}
@@ -168,4 +165,16 @@ func (r *PostgresUserRepository) FindManyByIDs(
 	}
 
 	return users, rows.Err()
+}
+
+func (r *PostgresUserRepository) UpdateProfile(id uuid.UUID, firstName, lastName, email string) error {
+	query := `UPDATE users SET first_name = $1, last_name = $2, email = $3 WHERE id = $4`
+	_, err := r.db.Exec(query, firstName, lastName, email, id)
+	return err
+}
+
+func (r *PostgresUserRepository) UpdatePrivacy(id uuid.UUID, p domain.PrivacySettings) error {
+	query := `UPDATE users SET is_private = $1, show_wallets = $2, show_communities = $3, show_posts = $4 WHERE id = $5`
+	_, err := r.db.Exec(query, p.IsPrivate, p.ShowWallets, p.ShowCommunities, p.ShowCommunityPosts, id)
+	return err
 }

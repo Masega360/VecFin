@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    risk_type VARCHAR(50),
+    risk_type VARCHAR(50) DEFAULT 'conservative',
     registration_date TIMESTAMP DEFAULT NOW(),
     last_access TIMESTAMP,
     is_private BOOLEAN DEFAULT false,
