@@ -37,7 +37,7 @@ type WalletUsecasePort interface {
 	// Miembros
 	AddMember(ctx context.Context, walletID, requesterID, targetID uuid.UUID, role domain.WalletRole) error
 	RemoveMember(ctx context.Context, walletID, requesterID, targetID uuid.UUID) error
-	ListMembers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.WalletMember, error)
+	ListMembers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.WalletMemberView, error)
 }
 
 type WalletHandler struct {
@@ -654,7 +654,7 @@ func (h *WalletHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if members == nil {
-		members = []domain.WalletMember{}
+		members = []domain.WalletMemberView{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

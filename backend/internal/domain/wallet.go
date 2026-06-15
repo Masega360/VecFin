@@ -33,6 +33,15 @@ type WalletMember struct {
 	JoinedAt time.Time  `json:"joined_at"`
 }
 
+type WalletMemberView struct {
+	WalletID  uuid.UUID  `json:"wallet_id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	Role      WalletRole `json:"role"`
+	JoinedAt  time.Time  `json:"joined_at"`
+	FirstName string     `json:"first_name"`
+	LastName  string     `json:"last_name"`
+}
+
 type CommunityWallet struct {
 	CommunityID uuid.UUID `json:"community_id"`
 	WalletID    uuid.UUID `json:"wallet_id"`
@@ -68,7 +77,7 @@ type WalletMemberRepository interface {
 	Add(ctx context.Context, m WalletMember) error
 	Remove(ctx context.Context, walletID, userID uuid.UUID) error
 	GetRole(ctx context.Context, walletID, userID uuid.UUID) (WalletRole, error)
-	ListMembers(ctx context.Context, walletID uuid.UUID) ([]WalletMember, error)
+	ListMembers(ctx context.Context, walletID uuid.UUID) ([]WalletMemberView, error)
 	ListWalletsByUser(ctx context.Context, userID uuid.UUID) ([]Wallet, error)
 }
 

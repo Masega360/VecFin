@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS wallet_member (
 
 -- Wallets de comunidad (fondos comunitarios)
 CREATE TABLE IF NOT EXISTS community_wallet (
-    community_id UUID NOT NULL REFERENCES community(id) ON DELETE CASCADE,
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
     wallet_id UUID NOT NULL REFERENCES wallet(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (community_id, wallet_id)

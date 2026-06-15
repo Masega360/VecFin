@@ -39,17 +39,19 @@ func (r *PostgresWalletMemberRepository) GetRole(ctx context.Context, walletID, 
 	return role, err
 }
 
-func (r *PostgresWalletMemberRepository) ListMembers(ctx context.Context, walletID uuid.UUID) ([]domain.WalletMember, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT wallet_id, user_id, role, joined_at FROM wallet_member WHERE wallet_id = $1`, walletID)
+func (r *PostgresWalletMemberRepository) ListMembers(ctx context.Context, walletID uuid.UUID) ([]domain.WalletMemberView, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT wm.wallet_id, wm.user_id, wm.role, wm.joined_at, u.first_name, u.last_name
+		FROM wallet_member wm JOIN users u ON wm.user_id = u.id
+		WHERE wm.wallet_id = $1`, walletID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var members []domain.WalletMember
+	var members []domain.WalletMemberView
 	for rows.Next() {
-		var m domain.WalletMember
-		if err := rows.Scan(&m.WalletID, &m.UserID, &m.Role, &m.JoinedAt); err != nil {
+		var m domain.WalletMemberView
+		if err := rows.Scan(&m.WalletID, &m.UserID, &m.Role, &m.JoinedAt, &m.FirstName, &m.LastName); err != nil {
 			return nil, err
 		}
 		members = append(members, m)

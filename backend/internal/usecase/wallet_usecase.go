@@ -399,7 +399,7 @@ func (uc *WalletsUseCase) RemoveMember(ctx context.Context, walletID, requesterI
 	return uc.memberRepo.Remove(ctx, walletID, targetID)
 }
 
-func (uc *WalletsUseCase) ListMembers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.WalletMember, error) {
+func (uc *WalletsUseCase) ListMembers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.WalletMemberView, error) {
 	if _, err := uc.memberRepo.GetRole(ctx, walletID, userID); err != nil {
 		return nil, err
 	}
