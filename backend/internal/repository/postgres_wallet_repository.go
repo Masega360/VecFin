@@ -49,7 +49,7 @@ func (r *PostgresWalletRepository) ListByUserPaginated(ctx context.Context, user
 	query := `
         SELECT id, creator_id, platform_id, name, created_at, last_sync 
         FROM wallet 
-        WHERE user_id = $1 
+        WHERE creator_id = $1 
         ORDER BY created_at DESC 
         LIMIT $2 OFFSET $3
     `
