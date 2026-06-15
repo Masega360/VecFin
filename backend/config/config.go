@@ -22,6 +22,7 @@ type Config struct {
 	SMTPPassword   string
 	GeminiAPIKey   string
 	AWSRegion      string
+	AssetSource    string // "own" = assets propios de VecFin, "external" = busca de wallets externas
 }
 
 func Load() *Config {
@@ -45,6 +46,7 @@ func Load() *Config {
 		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
 		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
 		AWSRegion:      getEnvOrDefault("AWS_REGION", "us-east-1"),
+		AssetSource:    getEnvOrDefault("ASSET_SOURCE", "external"), // "own" o "external"
 	}
 }
 

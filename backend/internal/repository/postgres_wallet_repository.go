@@ -15,9 +15,9 @@ type PostgresWalletRepository struct {
 
 func (r *PostgresWalletRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error) {
 	query := `
-		SELECT id, user_id, platform_id, name, api_key, api_secret, created_at, last_sync
+		SELECT id, creator_id, platform_id, name, api_key, api_secret, created_at, last_sync
 		FROM wallet
-		WHERE user_id = $1
+		WHERE creator_id = $1
 		ORDER BY created_at DESC
 	`
 	rows, err := r.db.QueryContext(ctx, query, userID)
@@ -31,7 +31,7 @@ func (r *PostgresWalletRepository) ListByUser(ctx context.Context, userID uuid.U
 		var w domain.Wallet
 		var lastSync sql.NullTime
 		if err := rows.Scan(
-			&w.ID, &w.UserID, &w.PlatformID, &w.Name,
+			&w.ID, &w.CreatorID, &w.PlatformID, &w.Name,
 			&w.APIKey, &w.APISecret,
 			&w.CreatedAt, &lastSync,
 		); err != nil {
@@ -56,14 +56,13 @@ func NewPostgresWalletRepository(db *sql.DB) *PostgresWalletRepository {
 
 func (r *PostgresWalletRepository) CreateWallet(ctx context.Context, wallet domain.Wallet) (uuid.UUID, error) {
 	query := `
-		INSERT INTO wallet (user_id, platform_id, name, api_key, api_secret)
+		INSERT INTO wallet (creator_id, platform_id, name, api_key, api_secret)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
-	// El driver de postgres acepta *string: si es nil inserta NULL
 	var id uuid.UUID
 	err := r.db.QueryRowContext(ctx, query,
-		wallet.UserID,
+		wallet.CreatorID,
 		wallet.PlatformID,
 		wallet.Name,
 		wallet.APIKey,    // *string → NULL si nil
@@ -74,16 +73,16 @@ func (r *PostgresWalletRepository) CreateWallet(ctx context.Context, wallet doma
 
 func (r *PostgresWalletRepository) ReadWallet(ctx context.Context, id uuid.UUID) (domain.Wallet, error) {
 	query := `
-		SELECT id, user_id, platform_id, name, api_key, api_secret, created_at, last_sync
+		SELECT id, creator_id, platform_id, name, api_key, api_secret, created_at, last_sync
 		FROM wallet
 		WHERE id = $1
 	`
 	var w domain.Wallet
-	var lastSync sql.NullTime // last_sync puede ser NULL si nunca se sincronizó
+	var lastSync sql.NullTime
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&w.ID, &w.UserID, &w.PlatformID, &w.Name,
-		&w.APIKey,    // *string: el driver pone nil si la columna es NULL
-		&w.APISecret, // *string: idem
+		&w.ID, &w.CreatorID, &w.PlatformID, &w.Name,
+		&w.APIKey,
+		&w.APISecret,
 		&w.CreatedAt,
 		&lastSync,
 	)

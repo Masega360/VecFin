@@ -117,10 +117,12 @@ func main() {
 	walletRepo := repository.NewPostgresWalletRepository(db)
 	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
 	platformRepo := repository.NewPostgresPlatformRepository(db)
+	walletMemberRepo := repository.NewPostgresWalletMemberRepository(db)
+	transferRepo := repository.NewPostgresTransferRepository(db)
 	exchanges := map[string]domain.ExchangeService{
 		"binance": binance.NewClient(),
 	}
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC, walletMemberRepo, transferRepo)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
