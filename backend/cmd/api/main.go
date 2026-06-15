@@ -203,6 +203,9 @@ func main() {
 		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoints de IA deshabilitados")
 	}
 
+	leaderboardHandler := handler.NewLeaderboardHandler(db)
+	leaderboardHandler.RegisterRoutes(cfg.JWTSecret)
+
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
