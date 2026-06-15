@@ -27,6 +27,7 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
 	"github.com/Masega360/vecfin/backend/internal/platform/news"
 	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
+	"github.com/Masega360/vecfin/backend/internal/platform/cache"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -111,7 +112,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authUC)
 	authHandler.RegisterRoutes()
 
-	yahooClient := yahoo.NewClient()
+	yahooClient := cache.NewMarketCache(yahoo.NewClient(), 2*time.Minute)
 	binanceMarket := binance.NewClient()
 	assetRepo := repository.NewPostgresAssetRepository(db)
 	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket)
@@ -125,10 +126,12 @@ func main() {
 	walletRepo := repository.NewPostgresWalletRepository(db)
 	assetWalletRepo := repository.NewPostgresAssetWalletRepository(db)
 	platformRepo := repository.NewPostgresPlatformRepository(db)
+	walletMemberRepo := repository.NewPostgresWalletMemberRepository(db)
+	transferRepo := repository.NewPostgresTransferRepository(db)
 	exchanges := map[string]domain.ExchangeService{
 		"binance": binance.NewClient(),
 	}
-	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC)
+	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC, walletMemberRepo, transferRepo)
 	walletHandler := handler.NewWalletHandler(walletUC)
 	walletHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -174,39 +177,54 @@ func main() {
 	// Inicia el worker para que consulte precios, por ejemplo, cada 5 minutos.
 	// Esto corre en una goroutine y no bloquea el servidor HTTP.
 	alertWorker.Start(CRON)
+
+	// News siempre disponible
+	newsSvc := news.NewService(news.NewClient(""))
+	newsHandler := handler.NewNewsHandler(newsSvc)
+	newsHandler.RegisterRoutes(cfg.JWTSecret)
+
+	// AI Provider: Gemini primary + Bedrock fallback, o solo Bedrock, o solo Gemini
+	var aiProvider domain.AIProvider
 	if cfg.GeminiAPIKey != "" {
 		geminiClient, err := gemini.NewClient(cfg.GeminiAPIKey)
 		if err != nil {
-			log.Fatal("Error inicializando Gemini:", err)
-		}
-
-		// Bedrock como fallback (usa credenciales AWS del entorno)
-		var aiProvider domain.AIProvider = geminiClient
-		bedrockClient, err := bedrock.NewClient(context.Background(), cfg.AWSRegion)
-		if err != nil {
-			log.Printf("Aviso: Bedrock no disponible (%v), usando solo Gemini", err)
+			log.Println("Aviso: Gemini no disponible:", err)
 		} else {
-			aiProvider = &aiprovider.Fallback{Primary: geminiClient, Secondary: bedrockClient}
-			log.Println("AI: Gemini (primary) + Bedrock (fallback)")
+			aiProvider = geminiClient
 		}
+	}
 
+	bedrockClient, err := bedrock.NewClient(context.Background(), cfg.AWSRegion)
+	if err != nil {
+		log.Printf("Aviso: Bedrock no disponible (%v)", err)
+	} else if aiProvider != nil {
+		aiProvider = &aiprovider.Fallback{Primary: aiProvider, Secondary: bedrockClient}
+		log.Println("AI: Gemini (primary) + Bedrock (fallback)")
+	} else {
+		aiProvider = bedrockClient
+		log.Println("AI: Bedrock only")
+	}
+
+	if aiProvider != nil {
 		recCacheRepo := repository.NewPostgresRecommendationRepository(db)
-		newsSvc := news.NewService(news.NewClient(""))
-		newsHandler := handler.NewNewsHandler(newsSvc)
-		newsHandler.RegisterRoutes(cfg.JWTSecret)
-
 		chatRepo := repository.NewPostgresChatRepository(db)
 
 		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo, newsSvc, assetRepo, chatRepo)
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
-		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
+		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletMemberRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {
-		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoints de IA deshabilitados")
+		log.Println("Aviso: ningún proveedor de IA disponible, endpoints de IA deshabilitados")
 	}
+
+	leaderboardHandler := handler.NewLeaderboardHandler(db)
+	leaderboardHandler.RegisterRoutes(cfg.JWTSecret)
+
+	marketplaceHandler := handler.NewMarketplaceHandler(db, yahooClient)
+	marketplaceHandler.RegisterRoutes(cfg.JWTSecret)
 
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

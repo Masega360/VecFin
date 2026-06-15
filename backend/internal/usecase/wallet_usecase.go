@@ -26,6 +26,8 @@ type WalletsUseCase struct {
 	assetsRepo   domain.AssetWalletRepository
 	market       domain.MarketService
 	platformRepo platformRepository
+	memberRepo   domain.WalletMemberRepository
+	transferRepo domain.TransferRepository
 	// exchanges mapea el nombre de la plataforma (lowercase) a su ExchangeService.
 	// Ej: "binance" -> *binance.Client
 	exchanges     map[string]domain.ExchangeService
@@ -41,6 +43,8 @@ func NewWalletsUseCase(
 	platformRepo platformRepository,
 	exchanges map[string]domain.ExchangeService,
 	followChecker ProfileVisibilityChecker,
+	memberRepo domain.WalletMemberRepository,
+	transferRepo domain.TransferRepository,
 ) *WalletsUseCase {
 	return &WalletsUseCase{
 		repo:          repo,
@@ -49,15 +53,27 @@ func NewWalletsUseCase(
 		platformRepo:  platformRepo,
 		exchanges:     exchanges,
 		followUsecase: followChecker,
+		memberRepo:    memberRepo,
+		transferRepo:  transferRepo,
 	}
 }
 
 func (uc *WalletsUseCase) Create(ctx context.Context, wallet domain.Wallet) (uuid.UUID, error) {
-	return uc.repo.CreateWallet(ctx, wallet)
+	id, err := uc.repo.CreateWallet(ctx, wallet)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	// El creador es owner automáticamente
+	_ = uc.memberRepo.Add(ctx, domain.WalletMember{
+		WalletID: id,
+		UserID:   wallet.CreatorID,
+		Role:     domain.WalletRoleOwner,
+	})
+	return id, nil
 }
 
 func (uc *WalletsUseCase) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error) {
-	return uc.repo.ListByUser(ctx, userID)
+	return uc.memberRepo.ListWalletsByUser(ctx, userID)
 }
 
 // Read devuelve la wallet solo si pertenece al usuario del token.
@@ -66,7 +82,7 @@ func (uc *WalletsUseCase) Read(ctx context.Context, id, userID uuid.UUID) (domai
 	if err != nil {
 		return domain.Wallet{}, err
 	}
-	if wallet.UserID != userID {
+	if wallet.CreatorID != userID {
 		return domain.Wallet{}, domain.ErrForbidden
 	}
 	return wallet, nil
@@ -79,7 +95,7 @@ func (uc *WalletsUseCase) Update(ctx context.Context, id, userID uuid.UUID, chan
 	if err != nil {
 		return err
 	}
-	if current.UserID != userID {
+	if current.CreatorID != userID {
 		return domain.ErrForbidden
 	}
 
@@ -105,7 +121,7 @@ func (uc *WalletsUseCase) SyncFromExchange(ctx context.Context, id, userID uuid.
 	if err != nil {
 		return err
 	}
-	if wallet.UserID != userID {
+	if wallet.CreatorID != userID {
 		return domain.ErrForbidden
 	}
 	if wallet.APIKey == nil || wallet.APISecret == nil {
@@ -152,7 +168,7 @@ func (uc *WalletsUseCase) Delete(ctx context.Context, id, userID uuid.UUID) erro
 	if err != nil {
 		return err
 	}
-	if wallet.UserID != userID {
+	if wallet.CreatorID != userID {
 		return domain.ErrForbidden
 	}
 	return uc.repo.DeleteWallet(ctx, id)
@@ -160,13 +176,13 @@ func (uc *WalletsUseCase) Delete(ctx context.Context, id, userID uuid.UUID) erro
 
 // ─── ASSETS DENTRO DE UNA WALLET ─────────────────────────────────────────────
 
-// ensureOwner valida que la wallet exista y pertenezca al usuario.
+// ensureOperator valida que el usuario sea miembro con permisos de operación (owner/admin).
 func (uc *WalletsUseCase) ensureOwner(ctx context.Context, walletID, userID uuid.UUID) error {
-	w, err := uc.repo.ReadWallet(ctx, walletID)
+	role, err := uc.memberRepo.GetRole(ctx, walletID, userID)
 	if err != nil {
 		return err
 	}
-	if w.UserID != userID {
+	if !role.CanOperate() {
 		return domain.ErrForbidden
 	}
 	return nil
@@ -237,18 +253,19 @@ func (uc *WalletsUseCase) RemoveAsset(
 }
 
 // GetWalletDetails devuelve la wallet con cada asset valuado al precio actual
-// y el total de la wallet. Si el market service falla para un ticker, el asset
-// se devuelve igualmente pero con Price=0 (no tira todo el endpoint).
+// y el total de la wallet. Usa fetch paralelo + cache para performance.
 func (uc *WalletsUseCase) GetWalletDetails(
 	ctx context.Context,
 	walletID, userID uuid.UUID,
 ) (domain.WalletDetails, error) {
+	// Autorización via wallet_member
+	if _, err := uc.memberRepo.GetRole(ctx, walletID, userID); err != nil {
+		return domain.WalletDetails{}, err
+	}
+
 	wallet, err := uc.repo.ReadWallet(ctx, walletID)
 	if err != nil {
 		return domain.WalletDetails{}, err
-	}
-	if wallet.UserID != userID {
-		return domain.WalletDetails{}, domain.ErrForbidden
 	}
 
 	assets, err := uc.assetsRepo.ListByWallet(ctx, walletID)
@@ -260,25 +277,49 @@ func (uc *WalletsUseCase) GetWalletDetails(
 	var total float64
 	var currency string
 
-	for _, a := range assets {
-		view := domain.WalletAssetView{
-			Ticker:   a.Ticker,
-			Quantity: a.Quantity,
+	if uc.market != nil && len(assets) > 0 {
+		// Fetch paralelo de precios
+		symbols := make([]string, len(assets))
+		for i, a := range assets {
+			symbols[i] = a.Ticker
 		}
-		if uc.market != nil {
-			// "1d" es el rango mínimo soportado por el proveedor Yahoo
-			if details, derr := uc.market.GetAssetDetails(a.Ticker, "1d"); derr == nil && details != nil {
-				view.Name = details.Name
-				view.Price = details.Price
-				view.Currency = details.Currency
-				view.MarketValue = a.Quantity * details.Price
+
+		type result struct {
+			idx     int
+			details *domain.AssetDetails
+		}
+		ch := make(chan result, len(assets))
+		for i, sym := range symbols {
+			go func(idx int, s string) {
+				d, _ := uc.market.GetAssetDetails(s, "1d")
+				ch <- result{idx, d}
+			}(i, sym)
+		}
+
+		detailsMap := make([]*domain.AssetDetails, len(assets))
+		for range assets {
+			r := <-ch
+			detailsMap[r.idx] = r.details
+		}
+
+		for i, a := range assets {
+			view := domain.WalletAssetView{Ticker: a.Ticker, Quantity: a.Quantity}
+			if d := detailsMap[i]; d != nil {
+				view.Name = d.Name
+				view.Price = d.Price
+				view.Currency = d.Currency
+				view.MarketValue = a.Quantity * d.Price
 				if currency == "" {
-					currency = details.Currency
+					currency = d.Currency
 				}
 			}
+			total += view.MarketValue
+			views = append(views, view)
 		}
-		total += view.MarketValue
-		views = append(views, view)
+	} else {
+		for _, a := range assets {
+			views = append(views, domain.WalletAssetView{Ticker: a.Ticker, Quantity: a.Quantity})
+		}
 	}
 
 	return domain.WalletDetails{
@@ -303,4 +344,77 @@ func (uc *WalletsUseCase) ShowUserWallets(ctx context.Context, viewerID, targetI
 
 	// 2. Traemos las wallets paginadas
 	return uc.repo.ListByUserPaginated(ctx, targetID, limit, offset)
+}
+
+// ─── TRANSFERENCIAS ──────────────────────────────────────────────────────────
+
+// Transfer mueve assets de una wallet a otra. El usuario debe tener permisos de operación en la wallet origen.
+func (uc *WalletsUseCase) Transfer(ctx context.Context, userID uuid.UUID, t domain.Transfer) (uuid.UUID, error) {
+	if t.Ticker == "" {
+		return uuid.Nil, ErrInvalidTicker
+	}
+	if t.Quantity <= 0 {
+		return uuid.Nil, ErrInvalidQuantity
+	}
+	// Validar permisos en wallet origen
+	if err := uc.ensureOwner(ctx, t.FromWalletID, userID); err != nil {
+		return uuid.Nil, err
+	}
+	// Descontar del origen
+	holding, err := uc.assetsRepo.GetByWalletAndTicker(ctx, t.FromWalletID, t.Ticker)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if holding.Quantity < t.Quantity {
+		return uuid.Nil, errors.New("saldo insuficiente")
+	}
+	if err := uc.assetsRepo.UpdateQuantity(ctx, t.FromWalletID, t.Ticker, holding.Quantity-t.Quantity); err != nil {
+		return uuid.Nil, err
+	}
+	// Acreditar en destino
+	if _, err := uc.assetsRepo.Add(ctx, t.ToWalletID, t.Ticker, t.Quantity); err != nil {
+		return uuid.Nil, err
+	}
+	t.CreatedBy = userID
+	return uc.transferRepo.Create(ctx, t)
+}
+
+func (uc *WalletsUseCase) ListTransfers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.Transfer, error) {
+	// Cualquier miembro puede ver las transferencias
+	if _, err := uc.memberRepo.GetRole(ctx, walletID, userID); err != nil {
+		return nil, err
+	}
+	return uc.transferRepo.ListByWallet(ctx, walletID)
+}
+
+// ─── MIEMBROS DE WALLET ──────────────────────────────────────────────────────
+
+func (uc *WalletsUseCase) AddMember(ctx context.Context, walletID, requesterID, targetID uuid.UUID, role domain.WalletRole) error {
+	// Solo owner puede agregar miembros
+	requesterRole, err := uc.memberRepo.GetRole(ctx, walletID, requesterID)
+	if err != nil {
+		return err
+	}
+	if requesterRole != domain.WalletRoleOwner {
+		return domain.ErrForbidden
+	}
+	return uc.memberRepo.Add(ctx, domain.WalletMember{WalletID: walletID, UserID: targetID, Role: role})
+}
+
+func (uc *WalletsUseCase) RemoveMember(ctx context.Context, walletID, requesterID, targetID uuid.UUID) error {
+	requesterRole, err := uc.memberRepo.GetRole(ctx, walletID, requesterID)
+	if err != nil {
+		return err
+	}
+	if requesterRole != domain.WalletRoleOwner {
+		return domain.ErrForbidden
+	}
+	return uc.memberRepo.Remove(ctx, walletID, targetID)
+}
+
+func (uc *WalletsUseCase) ListMembers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.WalletMemberView, error) {
+	if _, err := uc.memberRepo.GetRole(ctx, walletID, userID); err != nil {
+		return nil, err
+	}
+	return uc.memberRepo.ListMembers(ctx, walletID)
 }

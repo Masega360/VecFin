@@ -18,6 +18,7 @@ interface Wallet {
   last_sync?: string;
   total_value?: number;
   currency?: string;
+  my_role?: string;
 }
 
 interface PlatformItem {
@@ -337,7 +338,7 @@ export default function WalletsTab() {
               onPress={() =>
                 router.push({
                   pathname: '/wallet-detail',
-                  params: { walletId: item.id, walletName: item.name },
+                  params: { walletId: item.id, walletName: item.name, myRole: item.my_role || 'viewer' },
                 })
               }
             >
@@ -354,6 +355,11 @@ export default function WalletsTab() {
                   <View style={[styles.badge, item.api_key ? styles.badgeConnected : styles.badgeManual]}>
                     <Text style={styles.badgeText}>{item.api_key ? 'conectada' : 'manual'}</Text>
                   </View>
+                  {item.my_role && (
+                    <View style={[styles.badge, { backgroundColor: item.my_role === 'owner' ? '#FFD70030' : item.my_role === 'admin' ? '#00ADD830' : '#4a6a8030' }]}>
+                      <Text style={[styles.badgeText, { color: item.my_role === 'owner' ? '#FFD700' : item.my_role === 'admin' ? '#00ADD8' : '#4a6a80' }]}>{item.my_role}</Text>
+                    </View>
+                  )}
                   {item.last_sync ? (
                     <Text style={styles.syncText}>
                       sync {new Date(item.last_sync).toLocaleDateString()}
