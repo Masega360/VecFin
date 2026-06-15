@@ -222,15 +222,17 @@ export default function MarketplaceTab() {
       </View>
 
       {wallets.length > 1 && (
-        <ScrollView horizontal style={styles.walletSelector} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-          {wallets.map(w => (
-            <TouchableOpacity key={w.id}
-              style={[styles.walletChip, selectedWallet?.id === w.id && styles.walletChipActive]}
-              onPress={() => { setSelectedWallet(w); loadWalletAssets(w.id); }}>
-              <Text style={[styles.walletChipText, selectedWallet?.id === w.id && styles.walletChipTextActive]}>{w.name || 'Wallet'}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.walletSelector}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {wallets.map(w => (
+              <TouchableOpacity key={w.id}
+                style={[styles.walletChip, selectedWallet?.id === w.id && styles.walletChipActive]}
+                onPress={() => { setSelectedWallet(w); loadWalletAssets(w.id); }}>
+                <Text style={[styles.walletChipText, selectedWallet?.id === w.id && styles.walletChipTextActive]}>{w.name || 'Wallet'}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {loading ? <ActivityIndicator color="#00ADD8" style={{ marginTop: 40 }} /> : (
@@ -365,8 +367,8 @@ const styles = StyleSheet.create({
   title: { color: '#e0e0e0', fontSize: 20, fontWeight: '700' },
   sellBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#e74c3c20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e74c3c40' },
   sellBtnText: { color: '#e74c3c', fontWeight: '600', fontSize: 13 },
-  walletSelector: { marginBottom: 8, paddingHorizontal: 16 },
-  walletChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#132238' },
+  walletSelector: { paddingHorizontal: 16, paddingBottom: 8 },
+  walletChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#132238' },
   walletChipActive: { backgroundColor: '#00ADD830', borderWidth: 1, borderColor: '#00ADD8' },
   walletChipText: { color: '#8aaabf', fontSize: 12, fontWeight: '600' },
   walletChipTextActive: { color: '#00ADD8' },
