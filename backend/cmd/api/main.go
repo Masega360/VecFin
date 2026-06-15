@@ -169,27 +169,36 @@ func main() {
 	// Inicia el worker para que consulte precios, por ejemplo, cada 5 minutos.
 	// Esto corre en una goroutine y no bloquea el servidor HTTP.
 	alertWorker.Start(CRON)
+
+	// News siempre disponible
+	newsSvc := news.NewService(news.NewClient(""))
+	newsHandler := handler.NewNewsHandler(newsSvc)
+	newsHandler.RegisterRoutes(cfg.JWTSecret)
+
+	// AI Provider: Gemini primary + Bedrock fallback, o solo Bedrock, o solo Gemini
+	var aiProvider domain.AIProvider
 	if cfg.GeminiAPIKey != "" {
 		geminiClient, err := gemini.NewClient(cfg.GeminiAPIKey)
 		if err != nil {
-			log.Fatal("Error inicializando Gemini:", err)
-		}
-
-		// Bedrock como fallback (usa credenciales AWS del entorno)
-		var aiProvider domain.AIProvider = geminiClient
-		bedrockClient, err := bedrock.NewClient(context.Background(), cfg.AWSRegion)
-		if err != nil {
-			log.Printf("Aviso: Bedrock no disponible (%v), usando solo Gemini", err)
+			log.Println("Aviso: Gemini no disponible:", err)
 		} else {
-			aiProvider = &aiprovider.Fallback{Primary: geminiClient, Secondary: bedrockClient}
-			log.Println("AI: Gemini (primary) + Bedrock (fallback)")
+			aiProvider = geminiClient
 		}
+	}
 
+	bedrockClient, err := bedrock.NewClient(context.Background(), cfg.AWSRegion)
+	if err != nil {
+		log.Printf("Aviso: Bedrock no disponible (%v)", err)
+	} else if aiProvider != nil {
+		aiProvider = &aiprovider.Fallback{Primary: aiProvider, Secondary: bedrockClient}
+		log.Println("AI: Gemini (primary) + Bedrock (fallback)")
+	} else {
+		aiProvider = bedrockClient
+		log.Println("AI: Bedrock only")
+	}
+
+	if aiProvider != nil {
 		recCacheRepo := repository.NewPostgresRecommendationRepository(db)
-		newsSvc := news.NewService(news.NewClient(""))
-		newsHandler := handler.NewNewsHandler(newsSvc)
-		newsHandler.RegisterRoutes(cfg.JWTSecret)
-
 		chatRepo := repository.NewPostgresChatRepository(db)
 
 		recUC := usecase.NewRecommendationUsecase(aiProvider, userRepo, walletRepo, assetWalletRepo, recCacheRepo, newsSvc, assetRepo, chatRepo)
@@ -200,7 +209,7 @@ func main() {
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {
-		log.Println("Aviso: GEMINI_API_KEY no configurada, endpoints de IA deshabilitados")
+		log.Println("Aviso: ningún proveedor de IA disponible, endpoints de IA deshabilitados")
 	}
 
 	leaderboardHandler := handler.NewLeaderboardHandler(db)
