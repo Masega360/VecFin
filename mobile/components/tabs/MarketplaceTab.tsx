@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  TextInput, ActivityIndicator, Alert, Platform, Modal,
+  TextInput, ActivityIndicator, Alert, Platform, Modal, ScrollView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
@@ -31,11 +31,18 @@ export default function MarketplaceTab() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<'buy' | 'sell'>('buy');
   const [selectedTicker, setSelectedTicker] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [selectedPrice, setSelectedPrice] = useState(0);
   const [payTicker, setPayTicker] = useState('');
+  const [payPrice, setPayPrice] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  // wallets del user (para elegir desde cuál operar)
+  // cantidades con conversión
+  const [buyQty, setBuyQty] = useState('');
+  const [payQty, setPayQty] = useState('');
+  const [sellQty, setSellQty] = useState('');
+  const [receiveUsd, setReceiveUsd] = useState('');
+
+  // wallets
   const [wallets, setWallets] = useState<WalletOption[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<WalletOption | null>(null);
   const [walletAssets, setWalletAssets] = useState<AssetHolding[]>([]);
@@ -47,10 +54,8 @@ export default function MarketplaceTab() {
     const token = await getValidToken();
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/marketplace`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setPool(await res.json());
+      const res = await fetch(`${API_URL}/marketplace`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setPool(await res.json() || []);
     } catch {}
     finally { setLoading(false); }
   };
@@ -61,10 +66,10 @@ export default function MarketplaceTab() {
     try {
       const res = await fetch(`${API_URL}/wallets`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
-        const list = await res.json() || [];
+        const list = (await res.json()) || [];
         const operable = list.filter((w: any) => w.my_role === 'owner' || w.my_role === 'admin');
         setWallets(operable);
-        if (operable.length > 0) setSelectedWallet(operable[0]);
+        if (operable.length > 0) { setSelectedWallet(operable[0]); loadWalletAssets(operable[0].id); }
       }
     } catch {}
   };
@@ -78,68 +83,136 @@ export default function MarketplaceTab() {
     } catch {}
   };
 
-  const openBuy = (ticker: string) => {
-    setSelectedTicker(ticker);
+  // Conversión buy: cambio una → recalcula la otra
+  const onBuyQtyChange = (val: string) => {
+    setBuyQty(val);
+    const n = parseFloat(val);
+    if (!isNaN(n) && selectedPrice > 0 && payPrice > 0) {
+      setPayQty(((n * selectedPrice) / payPrice).toFixed(6));
+    } else { setPayQty(''); }
+  };
+
+  const onPayQtyChange = (val: string) => {
+    setPayQty(val);
+    const n = parseFloat(val);
+    if (!isNaN(n) && selectedPrice > 0 && payPrice > 0) {
+      setBuyQty(((n * payPrice) / selectedPrice).toFixed(6));
+    } else { setBuyQty(''); }
+  };
+
+  // Conversión sell
+  const onSellQtyChange = (val: string) => {
+    setSellQty(val);
+    const n = parseFloat(val);
+    if (!isNaN(n) && selectedPrice > 0) {
+      setReceiveUsd((n * selectedPrice).toFixed(2));
+    } else { setReceiveUsd(''); }
+  };
+
+  const openBuy = (item: PoolItem) => {
+    setSelectedTicker(item.ticker);
+    setSelectedPrice(item.price_usd);
     setModalMode('buy');
-    setQuantity('');
-    setPayTicker('');
+    setBuyQty(''); setPayQty(''); setPayTicker(''); setPayPrice(0);
     if (selectedWallet) loadWalletAssets(selectedWallet.id);
     setModalVisible(true);
   };
 
   const openSell = () => {
     setModalMode('sell');
-    setSelectedTicker('');
-    setQuantity('');
+    setSelectedTicker(''); setSelectedPrice(0);
+    setSellQty(''); setReceiveUsd('');
     if (selectedWallet) loadWalletAssets(selectedWallet.id);
     setModalVisible(true);
   };
 
-  const execute = async () => {
-    if (!selectedWallet || !quantity || parseFloat(quantity) <= 0) {
-      Alert.alert('Error', 'Completá los campos');
-      return;
-    }
-    setSubmitting(true);
-    const token = await getValidToken();
-    if (!token) return;
-
-    const endpoint = modalMode === 'buy' ? '/marketplace/buy' : '/marketplace/sell';
-    const payload: any = {
-      wallet_id: selectedWallet.id,
-      ticker: selectedTicker,
-      quantity: parseFloat(quantity),
-    };
-    if (modalMode === 'buy') payload.pay_ticker = payTicker;
-
-    try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok || res.status === 201) {
-        const data = await res.json();
-        Alert.alert('✓ Operación exitosa',
-          modalMode === 'buy'
-            ? `Compraste ${quantity} ${selectedTicker}\nPagaste ${data.paid?.toFixed(4)} ${payTicker}`
-            : `Vendiste ${quantity} ${selectedTicker}\nRecibiste ${data.received_usdt?.toFixed(2)} USDT`
-        );
-        setModalVisible(false);
-        loadPool();
-      } else {
-        const txt = await res.text();
-        Alert.alert('Error', txt);
+  const selectPayTicker = (ticker: string) => {
+    setPayTicker(ticker);
+    // Buscar precio en el pool o pedir
+    const poolItem = pool.find(p => p.ticker === ticker);
+    if (poolItem) {
+      setPayPrice(poolItem.price_usd);
+      // Recalcular si ya hay buyQty
+      const n = parseFloat(buyQty);
+      if (!isNaN(n) && selectedPrice > 0 && poolItem.price_usd > 0) {
+        setPayQty(((n * selectedPrice) / poolItem.price_usd).toFixed(6));
       }
-    } catch { Alert.alert('Error', 'Sin conexión'); }
-    finally { setSubmitting(false); }
+    } else {
+      // Fetch price
+      (async () => {
+        const token = await getValidToken();
+        if (!token) return;
+        try {
+          const res = await fetch(`${API_URL}/assets/${ticker}?range=1d`, { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) {
+            const d = await res.json();
+            setPayPrice(d.price || 0);
+            const n = parseFloat(buyQty);
+            if (!isNaN(n) && selectedPrice > 0 && d.price > 0) {
+              setPayQty(((n * selectedPrice) / d.price).toFixed(6));
+            }
+          }
+        } catch {}
+      })();
+    }
+  };
+
+  const selectSellTicker = (ticker: string) => {
+    setSelectedTicker(ticker);
+    const poolItem = pool.find(p => p.ticker === ticker);
+    if (poolItem) { setSelectedPrice(poolItem.price_usd); }
+    setSellQty(''); setReceiveUsd('');
+  };
+
+  const execute = async () => {
+    if (!selectedWallet) { Alert.alert('Error', 'Seleccioná una wallet'); return; }
+
+    if (modalMode === 'buy') {
+      const qty = parseFloat(buyQty);
+      if (!qty || qty <= 0 || !payTicker) { Alert.alert('Error', 'Completá los campos'); return; }
+      setSubmitting(true);
+      const token = await getValidToken();
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_URL}/marketplace/buy`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet_id: selectedWallet.id, ticker: selectedTicker, quantity: qty, pay_ticker: payTicker }),
+        });
+        if (res.ok || res.status === 201) {
+          const data = await res.json();
+          Alert.alert('✓ Compra exitosa', `+${buyQty} ${selectedTicker}\n-${parseFloat(payQty).toFixed(4)} ${payTicker}`);
+          setModalVisible(false); loadPool(); loadWalletAssets(selectedWallet.id);
+        } else { Alert.alert('Error', await res.text()); }
+      } catch { Alert.alert('Error', 'Sin conexión'); }
+      finally { setSubmitting(false); }
+    } else {
+      const qty = parseFloat(sellQty);
+      if (!qty || qty <= 0 || !selectedTicker) { Alert.alert('Error', 'Completá los campos'); return; }
+      setSubmitting(true);
+      const token = await getValidToken();
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_URL}/marketplace/sell`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet_id: selectedWallet.id, ticker: selectedTicker, quantity: qty }),
+        });
+        if (res.ok || res.status === 201) {
+          Alert.alert('✓ Venta exitosa', `-${sellQty} ${selectedTicker}\n+${receiveUsd} USDT`);
+          setModalVisible(false); loadPool(); loadWalletAssets(selectedWallet.id);
+        } else { Alert.alert('Error', await res.text()); }
+      } catch { Alert.alert('Error', 'Sin conexión'); }
+      finally { setSubmitting(false); }
+    }
   };
 
   const formatUSD = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  const maxPayAvailable = walletAssets.find(a => a.ticker === payTicker)?.quantity || 0;
+  const maxSellAvailable = walletAssets.find(a => a.ticker === selectedTicker)?.quantity || 0;
 
   return (
     <View style={styles.root}>
-      {/* Header */}
       <View style={styles.headerRow}>
         <Text style={styles.title}>Marketplace</Text>
         <TouchableOpacity style={styles.sellBtn} onPress={openSell}>
@@ -148,24 +221,18 @@ export default function MarketplaceTab() {
         </TouchableOpacity>
       </View>
 
-      {/* Wallet selector */}
       {wallets.length > 1 && (
-        <View style={styles.walletSelector}>
+        <ScrollView horizontal style={styles.walletSelector} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
           {wallets.map(w => (
-            <TouchableOpacity
-              key={w.id}
+            <TouchableOpacity key={w.id}
               style={[styles.walletChip, selectedWallet?.id === w.id && styles.walletChipActive]}
-              onPress={() => { setSelectedWallet(w); loadWalletAssets(w.id); }}
-            >
-              <Text style={[styles.walletChipText, selectedWallet?.id === w.id && styles.walletChipTextActive]} numberOfLines={1}>
-                {w.name}
-              </Text>
+              onPress={() => { setSelectedWallet(w); loadWalletAssets(w.id); }}>
+              <Text style={[styles.walletChipText, selectedWallet?.id === w.id && styles.walletChipTextActive]} numberOfLines={1}>{w.name}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       )}
 
-      {/* Pool list */}
       {loading ? <ActivityIndicator color="#00ADD8" style={{ marginTop: 40 }} /> : (
         <FlatList
           data={pool}
@@ -180,7 +247,7 @@ export default function MarketplaceTab() {
                 <Text style={styles.cardPrice}>{formatUSD(item.price_usd)}</Text>
                 <Text style={styles.cardQty}>Disponible: {item.quantity.toFixed(4)}</Text>
               </View>
-              <TouchableOpacity style={styles.buyBtn} onPress={() => openBuy(item.ticker)}>
+              <TouchableOpacity style={styles.buyBtn} onPress={() => openBuy(item)}>
                 <Text style={styles.buyBtnText}>Comprar</Text>
               </TouchableOpacity>
             </View>
@@ -189,62 +256,102 @@ export default function MarketplaceTab() {
         />
       )}
 
-      {/* Modal buy/sell */}
+      {/* Modal */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{modalMode === 'buy' ? 'Comprar' : 'Vender'}</Text>
+              <Text style={styles.modalTitle}>{modalMode === 'buy' ? `Comprar ${selectedTicker}` : 'Vender'}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <MaterialIcons name="close" size={24} color="#8aaabf" />
               </TouchableOpacity>
             </View>
 
-            {modalMode === 'sell' && (
-              <>
-                <Text style={styles.inputLabel}>Ticker a vender</Text>
-                <View style={styles.chipRow}>
-                  {walletAssets.map(a => (
-                    <TouchableOpacity key={a.ticker}
-                      style={[styles.tickerChip, selectedTicker === a.ticker && styles.tickerChipActive]}
-                      onPress={() => setSelectedTicker(a.ticker)}>
-                      <Text style={styles.tickerChipText}>{a.ticker} ({a.quantity.toFixed(2)})</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {modalMode === 'buy' ? (
+                <>
+                  {/* Quiero comprar */}
+                  <Text style={styles.inputLabel}>Quiero recibir ({selectedTicker})</Text>
+                  <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a6a80"
+                    value={buyQty} onChangeText={onBuyQtyChange} keyboardType="decimal-pad" />
+                  {selectedPrice > 0 && buyQty ? (
+                    <Text style={styles.conversionHint}>≈ {formatUSD(parseFloat(buyQty || '0') * selectedPrice)}</Text>
+                  ) : null}
 
-            {modalMode === 'buy' && (
-              <>
-                <Text style={styles.inputLabel}>Comprar: {selectedTicker}</Text>
-                <Text style={styles.inputLabel}>Pagar con:</Text>
-                <View style={styles.chipRow}>
-                  {walletAssets.filter(a => a.ticker !== selectedTicker).map(a => (
-                    <TouchableOpacity key={a.ticker}
-                      style={[styles.tickerChip, payTicker === a.ticker && styles.tickerChipActive]}
-                      onPress={() => setPayTicker(a.ticker)}>
-                      <Text style={styles.tickerChipText}>{a.ticker} ({a.quantity.toFixed(2)})</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
+                  {/* Pago con */}
+                  <Text style={styles.inputLabel}>Pago con</Text>
+                  <ScrollView horizontal contentContainerStyle={styles.chipRow}>
+                    {walletAssets.filter(a => a.ticker !== selectedTicker).map(a => (
+                      <TouchableOpacity key={a.ticker}
+                        style={[styles.tickerChip, payTicker === a.ticker && styles.tickerChipActive]}
+                        onPress={() => selectPayTicker(a.ticker)}>
+                        <Text style={styles.tickerChipText}>{a.ticker} ({a.quantity.toFixed(2)})</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
 
-            <Text style={styles.inputLabel}>Cantidad</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0.00"
-              placeholderTextColor="#4a6a80"
-              value={quantity}
-              onChangeText={setQuantity}
-              keyboardType="decimal-pad"
-            />
+                  {payTicker ? (
+                    <>
+                      <Text style={styles.inputLabel}>Voy a pagar ({payTicker})</Text>
+                      <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a6a80"
+                        value={payQty} onChangeText={onPayQtyChange} keyboardType="decimal-pad" />
+                      {maxPayAvailable > 0 && (
+                        <Text style={styles.availableHint}>Disponible: {maxPayAvailable.toFixed(4)} {payTicker}</Text>
+                      )}
+                      {parseFloat(payQty) > maxPayAvailable && (
+                        <Text style={styles.errorHint}>Saldo insuficiente</Text>
+                      )}
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {/* Sell mode */}
+                  <Text style={styles.inputLabel}>Ticker a vender</Text>
+                  <ScrollView horizontal contentContainerStyle={styles.chipRow}>
+                    {walletAssets.map(a => (
+                      <TouchableOpacity key={a.ticker}
+                        style={[styles.tickerChip, selectedTicker === a.ticker && styles.tickerChipActive]}
+                        onPress={() => selectSellTicker(a.ticker)}>
+                        <Text style={styles.tickerChipText}>{a.ticker} ({a.quantity.toFixed(2)})</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
 
-            <TouchableOpacity style={styles.executeBtn} onPress={execute} disabled={submitting}>
-              {submitting ? <ActivityIndicator color="#fff" size="small" /> :
-                <Text style={styles.executeBtnText}>{modalMode === 'buy' ? 'Confirmar Compra' : 'Confirmar Venta'}</Text>}
-            </TouchableOpacity>
+                  {selectedTicker ? (
+                    <>
+                      <Text style={styles.inputLabel}>Cantidad a vender</Text>
+                      <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a6a80"
+                        value={sellQty} onChangeText={onSellQtyChange} keyboardType="decimal-pad" />
+                      {maxSellAvailable > 0 && (
+                        <Text style={styles.availableHint}>Disponible: {maxSellAvailable.toFixed(4)}</Text>
+                      )}
+                      {parseFloat(sellQty) > maxSellAvailable && (
+                        <Text style={styles.errorHint}>Saldo insuficiente</Text>
+                      )}
+                      {receiveUsd ? (
+                        <View style={styles.receiveBox}>
+                          <Text style={styles.receiveLabel}>Recibís</Text>
+                          <Text style={styles.receiveValue}>{receiveUsd} USDT</Text>
+                          <Text style={styles.receiveUsd}>≈ {formatUSD(parseFloat(receiveUsd || '0'))}</Text>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : null}
+                </>
+              )}
+
+              <TouchableOpacity
+                style={[styles.executeBtn, submitting && { opacity: 0.5 }]}
+                onPress={execute}
+                disabled={submitting}
+              >
+                {submitting ? <ActivityIndicator color="#fff" size="small" /> :
+                  <Text style={styles.executeBtnText}>
+                    {modalMode === 'buy' ? '✓ Confirmar Compra' : '✓ Confirmar Venta'}
+                  </Text>}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -258,10 +365,10 @@ const styles = StyleSheet.create({
   title: { color: '#e0e0e0', fontSize: 20, fontWeight: '700' },
   sellBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#e74c3c20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e74c3c40' },
   sellBtnText: { color: '#e74c3c', fontWeight: '600', fontSize: 13 },
-  walletSelector: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  walletSelector: { maxHeight: 40, marginBottom: 8 },
   walletChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#132238' },
   walletChipActive: { backgroundColor: '#00ADD830', borderWidth: 1, borderColor: '#00ADD8' },
-  walletChipText: { color: '#4a6a80', fontSize: 12, fontWeight: '600', maxWidth: 100 },
+  walletChipText: { color: '#4a6a80', fontSize: 12, fontWeight: '600', maxWidth: 120 },
   walletChipTextActive: { color: '#00ADD8' },
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f1f35', borderRadius: 10, padding: 14, marginBottom: 8 },
   cardTicker: { color: '#e0e0e0', fontSize: 16, fontWeight: '700' },
@@ -271,15 +378,22 @@ const styles = StyleSheet.create({
   buyBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   empty: { color: '#4a6a80', textAlign: 'center', marginTop: 40 },
   modalOverlay: { flex: 1, backgroundColor: '#000000aa', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#0f1f35', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' },
+  modalContent: { backgroundColor: '#0f1f35', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { color: '#e0e0e0', fontSize: 18, fontWeight: '700' },
-  inputLabel: { color: '#8aaabf', fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6 },
-  input: { backgroundColor: '#132238', color: '#e0e0e0', borderRadius: 8, padding: 12, fontSize: 16 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tickerChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#132238' },
+  inputLabel: { color: '#8aaabf', fontSize: 12, fontWeight: '600', marginTop: 14, marginBottom: 6 },
+  input: { backgroundColor: '#132238', color: '#e0e0e0', borderRadius: 8, padding: 14, fontSize: 18, fontWeight: '600' },
+  conversionHint: { color: '#2ecc71', fontSize: 12, marginTop: 4 },
+  availableHint: { color: '#4a6a80', fontSize: 11, marginTop: 4 },
+  errorHint: { color: '#e74c3c', fontSize: 11, marginTop: 4 },
+  chipRow: { gap: 8, paddingVertical: 4 },
+  tickerChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: '#132238' },
   tickerChipActive: { backgroundColor: '#00ADD830', borderWidth: 1, borderColor: '#00ADD8' },
   tickerChipText: { color: '#c0c0c0', fontSize: 12, fontWeight: '600' },
-  executeBtn: { backgroundColor: '#00ADD8', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 20 },
+  receiveBox: { backgroundColor: '#132238', borderRadius: 10, padding: 14, marginTop: 12, alignItems: 'center' },
+  receiveLabel: { color: '#4a6a80', fontSize: 11 },
+  receiveValue: { color: '#2ecc71', fontSize: 22, fontWeight: '700', marginTop: 4 },
+  receiveUsd: { color: '#8aaabf', fontSize: 12, marginTop: 2 },
+  executeBtn: { backgroundColor: '#00ADD8', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 20, marginBottom: 20 },
   executeBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
