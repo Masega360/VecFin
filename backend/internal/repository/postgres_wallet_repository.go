@@ -47,7 +47,7 @@ func (r *PostgresWalletRepository) ListByUser(ctx context.Context, userID uuid.U
 
 func (r *PostgresWalletRepository) ListByUserPaginated(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Wallet, error) {
 	query := `
-        SELECT id, user_id, platform_id, name, created_at, last_sync 
+        SELECT id, creator_id, platform_id, name, created_at, last_sync 
         FROM wallet 
         WHERE user_id = $1 
         ORDER BY created_at DESC 
@@ -64,7 +64,7 @@ func (r *PostgresWalletRepository) ListByUserPaginated(ctx context.Context, user
 		var w domain.Wallet
 		var lastSync sql.NullTime
 
-		if err := rows.Scan(&w.ID, &w.UserID, &w.PlatformID, &w.Name, &w.CreatedAt, &lastSync); err != nil {
+		if err := rows.Scan(&w.ID, &w.CreatorID, &w.PlatformID, &w.Name, &w.CreatedAt, &lastSync); err != nil {
 			return nil, err
 		}
 
