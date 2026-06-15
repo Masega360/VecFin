@@ -59,11 +59,13 @@ const formatQty = (n: number) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function WalletDetailScreen() {
-  const { walletId, walletName } = useLocalSearchParams<{
+  const { walletId, walletName, myRole } = useLocalSearchParams<{
     walletId: string;
     walletName: string;
+    myRole: string;
   }>();
   const router = useRouter();
+  const canOperate = myRole === 'owner' || myRole === 'admin';
 
   // details + assets (valuados)
   const [details,   setDetails]   = useState<WalletDetails | null>(null);
@@ -498,13 +500,15 @@ export default function WalletDetailScreen() {
             <MaterialIcons name="people" size={18} color="#00ADD8" />
             <Text style={styles.navBtnText}>Miembros</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navBtn}
-            onPress={() => router.push({ pathname: '/wallet-transfers', params: { walletId, walletName } })}
-          >
-            <MaterialIcons name="swap-horiz" size={18} color="#00ADD8" />
-            <Text style={styles.navBtnText}>Transferencias</Text>
-          </TouchableOpacity>
+          {canOperate && (
+            <TouchableOpacity
+              style={styles.navBtn}
+              onPress={() => router.push({ pathname: '/wallet-transfers', params: { walletId, walletName } })}
+            >
+              <MaterialIcons name="swap-horiz" size={18} color="#00ADD8" />
+              <Text style={styles.navBtnText}>Transferencias</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -598,9 +602,11 @@ export default function WalletDetailScreen() {
       )}
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setView('addAsset')} activeOpacity={0.8}>
-        <MaterialIcons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      {canOperate && (
+        <TouchableOpacity style={styles.fab} onPress={() => setView('addAsset')} activeOpacity={0.8}>
+          <MaterialIcons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {/* Confirm delete modal (reemplaza Alert.alert porque no anda en react-native-web) */}
       <Modal

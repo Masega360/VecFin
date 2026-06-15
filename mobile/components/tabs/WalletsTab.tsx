@@ -338,7 +338,7 @@ export default function WalletsTab() {
               onPress={() =>
                 router.push({
                   pathname: '/wallet-detail',
-                  params: { walletId: item.id, walletName: item.name },
+                  params: { walletId: item.id, walletName: item.name, myRole: item.my_role || 'viewer' },
                 })
               }
             >
