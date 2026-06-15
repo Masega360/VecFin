@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/middleware"
@@ -27,7 +28,7 @@ type CommunityUsecasePort interface {
 	DemoteModerator(communityID, ownerID, targetID uuid.UUID) error
 	TransferOwnership(commID, userID, targetID uuid.UUID) error
 
-	ShowUserCommunities(viewerID, targetID uuid.UUID) ([]domain.Community, error)
+	ShowUserCommunities(viewerID, targetID uuid.UUID, limit, offset int) ([]domain.Community, error) // <-- ACTUALIZADO
 }
 
 type CommunityHandler struct {
@@ -395,7 +396,21 @@ func (h *CommunityHandler) GetPublicCommunities(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	comms, err := h.uc.ShowUserCommunities(viewerID, targetID)
+	limit := 10
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+	comms, err := h.uc.ShowUserCommunities(viewerID, targetID, limit, offset)
 	if err != nil {
 		if err.Error() == "no tienes permisos para ver las comunidades de este usuario" {
 			http.Error(w, err.Error(), http.StatusForbidden)

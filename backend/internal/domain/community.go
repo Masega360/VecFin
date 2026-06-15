@@ -41,6 +41,8 @@ type CommunityRepository interface {
 	Create(community Community) error
 	FindByID(id uuid.UUID) (Community, error)
 	GetByUserID(userID uuid.UUID) ([]Community, error)
+	GetByUserIDPaginated(userID uuid.UUID, limit, offset int) ([]Community, error)
+	CountByUserID(userID uuid.UUID) (int, error)
 	Search(query string) ([]Community, error)
 	Update(community Community) error
 	Delete(id uuid.UUID) error

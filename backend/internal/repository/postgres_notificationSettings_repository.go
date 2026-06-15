@@ -27,7 +27,7 @@ func (r *PostgresNotificationSettingsRepository) Create(setting domain.Notificat
 	query := `
        INSERT INTO notification_settings 
        (user_id, price_alerts, community_activity, new_members, marketing, follow_request, enabled_channels)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `
 	_, err := r.db.Exec(query,
 		setting.UserID,

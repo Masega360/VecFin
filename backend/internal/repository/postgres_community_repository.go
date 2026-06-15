@@ -95,6 +95,60 @@ func (r *PostgresCommunityRepository) GetByUserID(userID uuid.UUID) ([]domain.Co
 	return communities, nil
 }
 
+func (r *PostgresCommunityRepository) GetByUserIDPaginated(userID uuid.UUID, limit, offset int) ([]domain.Community, error) {
+	query := `
+        SELECT c.id, c.creator_id, c.name, c.description, c.rules, c.topics, c.logo_url, c.is_private, c.creation_date, c.member_count, c.post_count
+        FROM communities c
+        INNER JOIN community_members cm ON c.id = cm.community_id
+        WHERE cm.user_id = $1
+        ORDER BY cm.joined_at DESC 
+        LIMIT $2 OFFSET $3
+    `
+
+	rows, err := r.db.Query(query, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var communities []domain.Community
+
+	for rows.Next() {
+		var c domain.Community
+
+		err := rows.Scan(
+			&c.ID,
+			&c.CreatorID,
+			&c.Name,
+			&c.Description,
+			&c.Rules,
+			pq.Array(&c.Topics),
+			&c.LogoUrl,
+			&c.IsPrivate,
+			&c.CreationDate,
+			&c.MemberCount,
+			&c.PostCount,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		communities = append(communities, c)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return communities, nil
+}
+
+func (r *PostgresCommunityRepository) CountByUserID(userID uuid.UUID) (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM community_members WHERE user_id = $1`, userID).Scan(&count)
+	return count, err
+}
+
 func (r *PostgresCommunityRepository) Search(searchQuery string) ([]domain.Community, error) {
 	var comms []domain.Community
 	searchTerm := "%" + searchQuery + "%"

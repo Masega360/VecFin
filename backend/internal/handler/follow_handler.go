@@ -18,7 +18,7 @@ func mapUsersToResponse(users []domain.User) []UserResponse {
 			FirstName:        u.FirstName,
 			LastName:         u.LastName,
 			Email:            u.Email,
-			RiskType:         u.RiskType,
+			RiskType:         string(u.RiskType),
 			RegistrationDate: u.RegistrationDate,
 		})
 	}

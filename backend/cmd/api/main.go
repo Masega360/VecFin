@@ -91,8 +91,16 @@ func main() {
 	}
 	emailProvider := infrastructure.NewEmailService(userRepo, smtpConf)
 
+	inAppRepo := repository.NewPostgresInAppNotificationRepository(db)
+	inAppProvider := infrastructure.NewInAppService(inAppRepo)
+
 	dispatcher := usecase.NewNotificationDispatcher(settingsRepo)
 	dispatcher.RegisterProvider(domain.ChannelEmail, emailProvider)
+	dispatcher.RegisterProvider(domain.ChannelInApp, inAppProvider)
+
+	inAppUC := usecase.NewInAppNotificationUsecase(inAppRepo)
+	inAppHandler := handler.NewInAppNotificationHandler(inAppUC)
+	inAppHandler.RegisterRoutes(cfg.JWTSecret)
 
 	followRepo := repository.NewPostgresFollowRepository(db)
 	followUC := usecase.NewFollowUseCase(followRepo, userRepo, dispatcher)
@@ -154,7 +162,7 @@ func main() {
 	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertUC)
 	priceAlertHandler.RegisterRoutes(cfg.JWTSecret)
 
-	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, marketUC)
+	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, followRepo, commRepo, postRepo, marketUC, followUC)
 	dashboardHandler := handler.NewDashboardHandler(dashboardUC)
 	dashboardHandler.RegisterRoutes(cfg.JWTSecret)
 

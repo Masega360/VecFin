@@ -12,8 +12,11 @@ import (
 type UserUsecasePort interface {
 	Create(firstName, lastName, email, password string) error
 	Read(id string) (domain.User, error)
-	Update(id, firstName, lastName, email string) error
 	Delete(id string) error
+	UpdateProfile(id, firstName, lastName, email string) error
+	UpdateRiskProfile(id string, riskType string) error
+	UpdatePrivacy(id string, isPrivate, showWallet, showCommunities, showCommunitiesPost bool) error
+	Search(query string) ([]domain.User, error)
 }
 
 type UserHandler struct {
@@ -25,26 +28,30 @@ func NewUserHandler(uc UserUsecasePort) *UserHandler {
 }
 
 func (h *UserHandler) RegisterRoutes(jwtSecret string) {
-	// Pública
 	http.HandleFunc("POST /users", h.Create)
 
-	// Privadas
 	auth := middleware.RequireAuth(jwtSecret)
 
 	http.HandleFunc("GET /profile", auth(h.GetProfile))
 	http.HandleFunc("GET /users/{id}", auth(h.Read))
-	http.HandleFunc("PUT /users/{id}", auth(h.Update))
 	http.HandleFunc("DELETE /users/{id}", auth(h.Delete))
+
+	// Rutas segmentadas de Update
+	http.HandleFunc("PUT /users/{id}/profile", auth(h.UpdateProfile))
+	http.HandleFunc("PUT /users/{id}/risk", auth(h.UpdateRiskProfile))
+	http.HandleFunc("PUT /users/{id}/privacy", auth(h.UpdatePrivacy))
+
+	http.HandleFunc("GET /users/search", auth(h.SearchUsers))
 }
 
-// DTO para la respuesta: NUNCA incluimos el password hash aquí
 type UserResponse struct {
-	ID               string    `json:"id"`
-	FirstName        string    `json:"first_name"`
-	LastName         string    `json:"last_name"`
-	Email            string    `json:"email"`
-	RiskType         string    `json:"risk_type"`
-	RegistrationDate time.Time `json:"registration_date"`
+	ID               string                 `json:"id"`
+	FirstName        string                 `json:"first_name"`
+	LastName         string                 `json:"last_name"`
+	Email            string                 `json:"email"`
+	RiskType         string                 `json:"risk_type"`
+	RegistrationDate time.Time              `json:"registration_date"`
+	Privacy          domain.PrivacySettings `json:"privacy"`
 }
 
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +74,6 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) Read(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-
 	user, err := h.uc.Read(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -79,37 +85,15 @@ func (h *UserHandler) Read(w http.ResponseWriter, r *http.Request) {
 		FirstName:        user.FirstName,
 		LastName:         user.LastName,
 		Email:            user.Email,
-		RiskType:         user.RiskType,
+		RiskType:         string(user.RiskType),
 		RegistrationDate: user.RegistrationDate,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
 }
 
-func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	var body struct {
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Email     string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "solicitud inválida", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.uc.Update(id, body.FirstName, body.LastName, body.Email); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
 func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-
 	if err := h.uc.Delete(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -135,8 +119,98 @@ func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		FirstName:        user.FirstName,
 		LastName:         user.LastName,
 		Email:            user.Email,
-		RiskType:         user.RiskType,
+		RiskType:         string(user.RiskType),
 		RegistrationDate: user.RegistrationDate,
+		Privacy:          user.Privacy,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.uc.UpdateProfile(id, body.FirstName, body.LastName, body.Email); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *UserHandler) UpdateRiskProfile(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		RiskType string `json:"risk_type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.uc.UpdateRiskProfile(id, body.RiskType); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *UserHandler) UpdatePrivacy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		IsPrivate          bool `json:"is_private"`
+		ShowWallets        bool `json:"show_wallets"`
+		ShowCommunities    bool `json:"show_communities"`
+		ShowCommunityPosts bool `json:"show_community_posts"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.uc.UpdatePrivacy(id, body.IsPrivate, body.ShowWallets, body.ShowCommunities, body.ShowCommunityPosts); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+
+	users, err := h.uc.Search(query)
+	if err != nil {
+		http.Error(w, "Error en la búsqueda", http.StatusInternalServerError)
+		return
+	}
+
+	var res []UserResponse
+	for _, u := range users {
+		res = append(res, UserResponse{
+			ID:               u.ID.String(),
+			FirstName:        u.FirstName,
+			LastName:         u.LastName,
+			Email:            u.Email,
+			RiskType:         string(u.RiskType),
+			RegistrationDate: u.RegistrationDate,
+		})
+	}
+
+	if res == nil {
+		res = make([]UserResponse, 0)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

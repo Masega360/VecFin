@@ -52,7 +52,7 @@ func (u *AuthUsecase) GoogleLogin(idToken string) (string, error) {
 				LastName:         info.FamilyName,
 				Email:            info.Email,
 				GoogleID:         info.Sub,
-				RiskType:         "medium",
+				RiskType:         domain.ConservativeRisk,
 				RegistrationDate: time.Now(),
 			}
 			if err := u.repo.Save(user); err != nil {

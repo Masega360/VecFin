@@ -45,6 +45,38 @@ func (r *PostgresWalletRepository) ListByUser(ctx context.Context, userID uuid.U
 	return wallets, rows.Err()
 }
 
+func (r *PostgresWalletRepository) ListByUserPaginated(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Wallet, error) {
+	query := `
+        SELECT id, user_id, platform_id, name, created_at, last_sync 
+        FROM wallet 
+        WHERE user_id = $1 
+        ORDER BY created_at DESC 
+        LIMIT $2 OFFSET $3
+    `
+	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var wallets []domain.Wallet
+	for rows.Next() {
+		var w domain.Wallet
+		var lastSync sql.NullTime
+
+		if err := rows.Scan(&w.ID, &w.UserID, &w.PlatformID, &w.Name, &w.CreatedAt, &lastSync); err != nil {
+			return nil, err
+		}
+
+		if lastSync.Valid {
+			w.LastSync = lastSync.Time
+		}
+
+		wallets = append(wallets, w)
+	}
+	return wallets, rows.Err()
+}
+
 func (r *PostgresWalletRepository) UpdateLastSync(ctx context.Context, id uuid.UUID, t time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE wallet SET last_sync=$1 WHERE id=$2`, t, id)
 	return err

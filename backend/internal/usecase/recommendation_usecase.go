@@ -109,7 +109,7 @@ func (uc *RecommendationUsecase) refresh(ctx context.Context, userID uuid.UUID) 
 	}
 
 	recs, err := uc.ai.GetRecommendations(ctx, domain.RecommendationInput{
-		RiskType:  user.RiskType,
+		RiskType:  string(user.RiskType),
 		Holdings:  holdings,
 		HotTopics: uc.buildPersonalizedTopics(ctx, userID, holdings),
 	})
@@ -120,7 +120,6 @@ func (uc *RecommendationUsecase) refresh(ctx context.Context, userID uuid.UUID) 
 	_ = uc.cache.Upsert(ctx, domain.RecommendationCache{UserID: userID, Data: recs})
 	return recs, nil
 }
-
 
 func (uc *RecommendationUsecase) buildPersonalizedTopics(ctx context.Context, userID uuid.UUID, holdings []string) []string {
 	// Collect all queries: holdings + favorites + recent chat topics

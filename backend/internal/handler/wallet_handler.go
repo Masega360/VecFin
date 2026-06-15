@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -28,7 +29,7 @@ type WalletUsecasePort interface {
 	RemoveAsset(ctx context.Context, walletID, userID uuid.UUID, ticker string) error
 	GetWalletDetails(ctx context.Context, walletID, userID uuid.UUID) (domain.WalletDetails, error)
 
-	ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error)
+	ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID, limit, offset int) ([]domain.Wallet, error)
 
 	// Transferencias
 	Transfer(ctx context.Context, userID uuid.UUID, t domain.Transfer) (uuid.UUID, error)
@@ -497,9 +498,28 @@ func (h *WalletHandler) GetPublicWallets(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	wallets, err := h.uc.ShowUserWallets(r.Context(), viewerID, targetID)
+	limit := 10
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	wallets, err := h.uc.ShowUserWallets(r.Context(), viewerID, targetID, limit, offset)
 	if err != nil {
-		handleUsecaseErr(w, err)
+		if err.Error() == "no tienes permisos para ver las wallets de este usuario" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

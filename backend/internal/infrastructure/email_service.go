@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"fmt"
 	"net/smtp"
+	"strings"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/google/uuid"
@@ -41,13 +42,15 @@ func (s *EmailService) Send(userID uuid.UUID, title, message string) error {
 	to := []string{user.Email}
 	addr := fmt.Sprintf("%s:%d", s.Config.SMTPServer, s.Config.Port)
 
-	// 1. Cabeceras clave para HTML y acentos (UTF-8)
 	headers := "MIME-Version: 1.0\r\n" +
 		"Content-Type: text/html; charset=\"UTF-8\"\r\n" +
 		"To: " + user.Email + "\r\n" +
 		"Subject: " + title + "\r\n\r\n"
 
-	// 2. El "Layout Maestro". Usamos los mismos colores de tu frontend (#0a1628, #00ADD8)
+	// 🚀 FORMATEO: Convertimos los \n del texto plano en <br> para HTML
+	htmlFormattedMessage := strings.ReplaceAll(message, "\n", "<br>")
+
+	// 2. El "Layout Maestro".
 	htmlBody := fmt.Sprintf(`
     <!DOCTYPE html>
     <html>
@@ -62,7 +65,7 @@ func (s *EmailService) Send(userID uuid.UUID, title, message string) error {
                         
                         <tr>
                             <td style="background-color: #0a1628; padding: 24px; text-align: center;">
-                                <h1 style="color: #00ADD8; margin: 0; font-size: 28px; letter-spacing: 1px;">vecFin</h1>
+                                <h1 style="color: #00ADD8; margin: 0; font-size: 28px; letter-spacing: 1px;">VecFin</h1>
                             </td>
                         </tr>
 
@@ -70,7 +73,7 @@ func (s *EmailService) Send(userID uuid.UUID, title, message string) error {
                             <td style="padding: 32px; color: #132238; line-height: 1.6;">
                                 <p style="font-size: 18px; margin-top: 0;">Hola <strong>%s</strong>,</p>
                                 
-                                <div style="margin-top: 24px;">
+                                <div style="margin-top: 24px; font-size: 16px;">
                                     %s
                                 </div>
                                 
@@ -80,7 +83,7 @@ func (s *EmailService) Send(userID uuid.UUID, title, message string) error {
                         <tr>
                             <td style="background-color: #f9f9fa; padding: 20px; text-align: center; border-top: 1px solid #eeeeee;">
                                 <p style="margin: 0; color: #8aaabf; font-size: 13px;">Estás recibiendo este correo porque configuraste tus preferencias en la app.</p>
-                                <p style="margin: 4px 0 0 0; color: #8aaabf; font-size: 13px;">© 2026 vecFin. Todos los derechos reservados.</p>
+                                <p style="margin: 4px 0 0 0; color: #8aaabf; font-size: 13px;">© 2026 VecFin. Todos los derechos reservados.</p>
                             </td>
                         </tr>
 
@@ -90,9 +93,8 @@ func (s *EmailService) Send(userID uuid.UUID, title, message string) error {
         </table>
     </body>
     </html>
-    `, user.FirstName, message)
+    `, user.FirstName, htmlFormattedMessage) // Pasamos la variable formateada acá
 
-	// 3. Juntamos cabeceras y cuerpo
 	msg := []byte(headers + htmlBody)
 
 	err = smtp.SendMail(addr, auth, s.Config.Sender, to, msg)

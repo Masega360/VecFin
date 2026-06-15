@@ -16,6 +16,7 @@ import RecommendationsTab from '@/components/tabs/RecommendationsTab';
 import ChatTab from '@/components/tabs/ChatTab';
 import NewsTab from '@/components/tabs/NewsTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
+import NotificationsTab from '@/components/tabs/NotificationsTab';
 import LeaderboardTab from '@/components/tabs/LeaderboardTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 
@@ -37,6 +38,12 @@ const TABS: TabConfig[] = [
     label: 'Dashboard',
     icon: 'dashboard',
     component: DashboardTab,
+  },
+  {
+    id: 'notifications',
+    label: 'Avisos',
+    icon: 'notifications',
+    component: NotificationsTab,
   },
   {
     id: 'assets',

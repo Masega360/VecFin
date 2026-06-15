@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/middleware"
@@ -17,7 +18,7 @@ type PostUsecasePort interface {
 	DeletePost(postID, userID uuid.UUID) error
 	SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.PostResponse, error)
 	GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error)
-	ShowPosts(viewerID, targetID uuid.UUID) ([]domain.PostResponse, error)
+	ShowPosts(viewerID, targetID uuid.UUID, limit, offset int) ([]domain.PostResponse, error)
 }
 
 func (h *PostHandler) RegisterRoutes(jwtSecret string) {
@@ -267,7 +268,24 @@ func (h *PostHandler) ShowPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posts, err := h.uc.ShowPosts(viewerID, targetID)
+	limit := 10
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+	// -----------------------------
+
+	// Pasamos limit y offset al caso de uso
+	posts, err := h.uc.ShowPosts(viewerID, targetID, limit, offset)
 	if err != nil {
 		if err.Error() == "no tienes permisos para ver los posts de este usuario" {
 			http.Error(w, err.Error(), http.StatusForbidden)

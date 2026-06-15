@@ -102,10 +102,7 @@ func (r *PostgresUserRepository) Delete(id uuid.UUID) error {
 	return err
 }
 
-func (r *PostgresUserRepository) FindManyByIDs(
-	ids []uuid.UUID,
-) ([]domain.User, error) {
-
+func (r *PostgresUserRepository) FindManyByIDs(ids []uuid.UUID) ([]domain.User, error) {
 	if len(ids) == 0 {
 		return []domain.User{}, nil
 	}
@@ -135,6 +132,70 @@ func (r *PostgresUserRepository) FindManyByIDs(
 	}
 
 	rows, err := r.db.Query(query, pq.Array(stringIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []domain.User
+
+	for rows.Next() {
+		var user domain.User
+
+		err := rows.Scan(
+			&user.ID,
+			&user.FirstName,
+			&user.LastName,
+			&user.Email,
+			&user.PasswordHash,
+			&user.GoogleID,
+			&user.RiskType,
+			&user.RegistrationDate,
+			&user.Privacy.IsPrivate,
+			&user.Privacy.ShowWallets,
+			&user.Privacy.ShowCommunities,
+			&user.Privacy.ShowCommunityPosts,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		users = append(users, user)
+	}
+
+	return users, rows.Err()
+}
+
+func (r *PostgresUserRepository) UpdateProfile(id uuid.UUID, firstName, lastName, email string) error {
+	query := `UPDATE users SET first_name = $1, last_name = $2, email = $3 WHERE id = $4`
+	_, err := r.db.Exec(query, firstName, lastName, email, id)
+	return err
+}
+
+func (r *PostgresUserRepository) UpdatePrivacy(id uuid.UUID, p domain.PrivacySettings) error {
+	query := `UPDATE users SET is_private = $1, show_wallets = $2, show_communities = $3, show_posts = $4 WHERE id = $5`
+	_, err := r.db.Exec(query, p.IsPrivate, p.ShowWallets, p.ShowCommunities, p.ShowCommunityPosts, id)
+	return err
+}
+
+// Search busca en la base de datos usando ILIKE para coincidencias insensibles a mayúsculas/minúsculas
+func (r *PostgresUserRepository) Search(query string) ([]domain.User, error) {
+	// Preparamos el patrón de búsqueda para que busque en cualquier parte del texto
+	searchPattern := "%" + query + "%"
+
+	sqlQuery := `
+        SELECT 
+            id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), 
+            risk_type, registration_date, is_private, show_wallets, show_communities, show_posts
+        FROM users 
+        WHERE first_name ILIKE $1 
+           OR last_name ILIKE $1 
+           OR email ILIKE $1
+        LIMIT 50
+    `
+
+	rows, err := r.db.Query(sqlQuery, searchPattern)
 	if err != nil {
 		return nil, err
 	}
