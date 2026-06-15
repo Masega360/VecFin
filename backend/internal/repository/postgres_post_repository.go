@@ -88,6 +88,12 @@ func (r *PostgresPostRepository) FindByCommunityID(communityID, readerID uuid.UU
 	return posts, nil
 }
 
+func (r *PostgresPostRepository) CountByUserID(authorID uuid.UUID) (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE author_id = $1`, authorID).Scan(&count)
+	return count, err
+}
+
 func (r *PostgresPostRepository) FindRepliesByPostID(parentID, readerID uuid.UUID) ([]domain.PostResponse, error) {
 	var replies []domain.PostResponse
 
@@ -203,7 +209,7 @@ func (r *PostgresPostRepository) DeleteVote(postID, userID uuid.UUID) error {
 	return err
 }
 
-func (r *PostgresPostRepository) FindByAuthorID(authorID, readerID uuid.UUID) ([]domain.PostResponse, error) {
+func (r *PostgresPostRepository) FindByAuthorID(authorID, readerID uuid.UUID, limit, offset int) ([]domain.PostResponse, error) {
 	query := `
         SELECT p.id, p.community_id, p.parent_id, p.author_id, p.title, p.content, p.url,
                p.upvotes, p.downvotes, p.comment_count, p.created_at, p.updated_at,
@@ -214,9 +220,10 @@ func (r *PostgresPostRepository) FindByAuthorID(authorID, readerID uuid.UUID) ([
         LEFT JOIN post_votes pv ON pv.post_id = p.id AND pv.user_id = $2
         WHERE p.author_id = $1 AND p.parent_id IS NULL
         ORDER BY p.created_at DESC
+        LIMIT $3 OFFSET $4
     `
 
-	rows, err := r.db.Query(query, authorID, readerID)
+	rows, err := r.db.Query(query, authorID, readerID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

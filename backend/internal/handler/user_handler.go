@@ -16,6 +16,7 @@ type UserUsecasePort interface {
 	UpdateProfile(id, firstName, lastName, email string) error
 	UpdateRiskProfile(id string, riskType string) error
 	UpdatePrivacy(id string, isPrivate, showWallet, showCommunities, showCommunitiesPost bool) error
+	Search(query string) ([]domain.User, error)
 }
 
 type UserHandler struct {
@@ -39,6 +40,8 @@ func (h *UserHandler) RegisterRoutes(jwtSecret string) {
 	http.HandleFunc("PUT /users/{id}/profile", auth(h.UpdateProfile))
 	http.HandleFunc("PUT /users/{id}/risk", auth(h.UpdateRiskProfile))
 	http.HandleFunc("PUT /users/{id}/privacy", auth(h.UpdatePrivacy))
+
+	http.HandleFunc("GET /users/search", auth(h.SearchUsers))
 }
 
 type UserResponse struct {
@@ -178,4 +181,38 @@ func (h *UserHandler) UpdatePrivacy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+
+	users, err := h.uc.Search(query)
+	if err != nil {
+		http.Error(w, "Error en la búsqueda", http.StatusInternalServerError)
+		return
+	}
+
+	var res []UserResponse
+	for _, u := range users {
+		res = append(res, UserResponse{
+			ID:               u.ID.String(),
+			FirstName:        u.FirstName,
+			LastName:         u.LastName,
+			Email:            u.Email,
+			RiskType:         string(u.RiskType),
+			RegistrationDate: u.RegistrationDate,
+		})
+	}
+
+	if res == nil {
+		res = make([]UserResponse, 0)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
 }

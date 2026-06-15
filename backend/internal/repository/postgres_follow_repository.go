@@ -160,3 +160,17 @@ func (r *PostgresFollowRepository) GetRelationship(followerID, followingID uuid.
 
 	return follow, nil
 }
+
+func (r *PostgresFollowRepository) CountFollowers(targetID uuid.UUID, status domain.FollowStatus) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM follows WHERE following_id = $1 AND status = $2`
+	err := r.db.QueryRow(query, targetID, status).Scan(&count)
+	return count, err
+}
+
+func (r *PostgresFollowRepository) CountFollowing(followerID uuid.UUID, status domain.FollowStatus) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM follows WHERE follower_id = $1 AND status = $2`
+	err := r.db.QueryRow(query, followerID, status).Scan(&count)
+	return count, err
+}

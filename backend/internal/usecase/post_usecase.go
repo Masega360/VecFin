@@ -230,7 +230,7 @@ func (p *PostUsecase) GetReplies(postID, readerID uuid.UUID) ([]domain.PostRespo
 	return p.postRepo.FindRepliesByPostID(postID, readerID)
 }
 
-func (p *PostUsecase) ShowPosts(viewerID, targetID uuid.UUID) ([]domain.PostResponse, error) {
+func (p *PostUsecase) ShowPosts(viewerID, targetID uuid.UUID, limit, offset int) ([]domain.PostResponse, error) {
 	profileVis, err := p.followUsecase.GetProfileVisibility(viewerID, targetID)
 	if err != nil {
 		return nil, err
@@ -240,5 +240,5 @@ func (p *PostUsecase) ShowPosts(viewerID, targetID uuid.UUID) ([]domain.PostResp
 		return nil, errors.New("no tienes permisos para ver los posts de este usuario")
 	}
 
-	return p.postRepo.FindByAuthorID(targetID, viewerID)
+	return p.postRepo.FindByAuthorID(targetID, viewerID, limit, offset)
 }

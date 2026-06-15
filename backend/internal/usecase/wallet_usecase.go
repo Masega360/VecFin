@@ -11,15 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type walletRepository interface {
-	CreateWallet(ctx context.Context, wallet domain.Wallet) (uuid.UUID, error)
-	ReadWallet(ctx context.Context, id uuid.UUID) (domain.Wallet, error)
-	ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error)
-	UpdateWallet(ctx context.Context, id uuid.UUID, wallet domain.Wallet) error
-	UpdateLastSync(ctx context.Context, id uuid.UUID, t time.Time) error
-	DeleteWallet(ctx context.Context, id uuid.UUID) error
-}
-
 // ErrInvalidQuantity se devuelve cuando la cantidad no es estrictamente positiva.
 var ErrInvalidQuantity = errors.New("cantidad inválida: debe ser mayor a cero")
 
@@ -31,7 +22,7 @@ type platformRepository interface {
 }
 
 type WalletsUseCase struct {
-	repo         walletRepository
+	repo         domain.WalletRepository
 	assetsRepo   domain.AssetWalletRepository
 	market       domain.MarketService
 	platformRepo platformRepository
@@ -44,7 +35,7 @@ type WalletsUseCase struct {
 // NewWalletsUseCase construye el usecase. assetsRepo y market pueden ser nil
 // si el caller no necesita operaciones sobre assets.
 func NewWalletsUseCase(
-	repo walletRepository,
+	repo domain.WalletRepository,
 	assetsRepo domain.AssetWalletRepository,
 	market domain.MarketService,
 	platformRepo platformRepository,
@@ -298,21 +289,18 @@ func (uc *WalletsUseCase) GetWalletDetails(
 	}, nil
 }
 
-func (uc *WalletsUseCase) ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error) {
+func (uc *WalletsUseCase) ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID, limit, offset int) ([]domain.Wallet, error) {
 
-	// Verificamos permisos
-	profileVis, err := uc.followUsecase.GetProfileVisibility(viewerID, targetID)
+	// 1. Verificamos la visibilidad (como ya tenías)
+	visibility, err := uc.followUsecase.GetProfileVisibility(viewerID, targetID)
 	if err != nil {
 		return nil, err
 	}
-	if !profileVis.CanSeeWallets {
+
+	if !visibility.CanSeeWallets {
 		return nil, errors.New("no tienes permisos para ver las wallets de este usuario")
 	}
 
-	wallets, err := uc.repo.ListByUser(ctx, targetID)
-	if err != nil {
-		return nil, err
-	}
-
-	return wallets, nil
+	// 2. Traemos las wallets paginadas
+	return uc.repo.ListByUserPaginated(ctx, targetID, limit, offset)
 }

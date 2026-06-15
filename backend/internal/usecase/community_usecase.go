@@ -396,7 +396,7 @@ func (u *CommunityUsecase) DemoteModerator(communityID, ownerID, targetID uuid.U
 	return u.repo.UpdateMember(target)
 }
 
-func (u *CommunityUsecase) ShowUserCommunities(viewerID, targetID uuid.UUID) ([]domain.Community, error) {
+func (u *CommunityUsecase) ShowUserCommunities(viewerID, targetID uuid.UUID, limit, offset int) ([]domain.Community, error) {
 	profileVis, err := u.followUsecase.GetProfileVisibility(viewerID, targetID)
 	if err != nil {
 		return nil, err
@@ -404,7 +404,8 @@ func (u *CommunityUsecase) ShowUserCommunities(viewerID, targetID uuid.UUID) ([]
 	if !profileVis.CanSeeCommunities {
 		return nil, errors.New("no tienes permisos para ver las comunidades de este usuario")
 	}
-	comms, err := u.repo.GetByUserID(targetID)
+
+	comms, err := u.repo.GetByUserIDPaginated(targetID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

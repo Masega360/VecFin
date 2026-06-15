@@ -118,3 +118,11 @@ func (u *UserUsecase) UpdatePrivacy(id string, isPrivate, showWallet, showCommun
 
 	return u.repo.Update(existingUser)
 }
+
+func (u *UserUsecase) Search(query string) ([]domain.User, error) {
+	if query == "" {
+		return []domain.User{}, nil
+	}
+
+	return u.repo.Search(query)
+}

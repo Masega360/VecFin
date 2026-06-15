@@ -29,9 +29,10 @@ type PostRepository interface {
 	Create(post Post) error
 	FindByID(id uuid.UUID) (Post, error)
 	FindByCommunityID(communityID, readerID uuid.UUID) ([]PostResponse, error)
+	CountByUserID(authorID uuid.UUID) (int, error)
 	FindRepliesByPostID(parentID, readerID uuid.UUID) ([]PostResponse, error)
 	SearchPostsInCommunity(communityID uuid.UUID, query string) ([]PostResponse, error)
-	FindByAuthorID(authorID, readerID uuid.UUID) ([]PostResponse, error)
+	FindByAuthorID(authorID, readerID uuid.UUID, limit, offset int) ([]PostResponse, error) // <-- Agregar readerID
 	Update(post Post) error
 	Delete(id uuid.UUID) error
 

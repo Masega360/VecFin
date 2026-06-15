@@ -31,4 +31,6 @@ type FollowRepository interface {
 
 	GetFollowerIDs(targetID uuid.UUID, status FollowStatus) ([]uuid.UUID, error)
 	GetFollowingIDs(followerID uuid.UUID, status FollowStatus) ([]uuid.UUID, error)
+	CountFollowers(targetID uuid.UUID, status FollowStatus) (int, error)
+	CountFollowing(followerID uuid.UUID, status FollowStatus) (int, error)
 }

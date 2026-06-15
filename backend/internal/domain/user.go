@@ -78,4 +78,5 @@ type UserRepository interface {
 	Update(user User) error
 	Delete(id uuid.UUID) error
 	FindManyByIDs(ids []uuid.UUID) ([]User, error)
+	Search(query string) ([]User, error)
 }

@@ -159,7 +159,7 @@ func main() {
 	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertUC)
 	priceAlertHandler.RegisterRoutes(cfg.JWTSecret)
 
-	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, marketUC)
+	dashboardUC := usecase.NewDashboardUsecase(walletRepo, assetWalletRepo, priceAlertRepo, followRepo, commRepo, postRepo, marketUC, followUC)
 	dashboardHandler := handler.NewDashboardHandler(dashboardUC)
 	dashboardHandler.RegisterRoutes(cfg.JWTSecret)
 

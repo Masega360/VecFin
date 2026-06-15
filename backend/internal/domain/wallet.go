@@ -21,6 +21,7 @@ type Wallet struct {
 type WalletRepository interface {
 	CreateWallet(ctx context.Context, wallet Wallet) (uuid.UUID, error)
 	ReadWallet(ctx context.Context, id uuid.UUID) (Wallet, error)
+	ListByUserPaginated(ctx context.Context, userID uuid.UUID, limit, offset int) ([]Wallet, error)
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]Wallet, error)
 	UpdateWallet(ctx context.Context, id uuid.UUID, wallet Wallet) error
 	UpdateLastSync(ctx context.Context, id uuid.UUID, t time.Time) error

@@ -178,3 +178,55 @@ func (r *PostgresUserRepository) UpdatePrivacy(id uuid.UUID, p domain.PrivacySet
 	_, err := r.db.Exec(query, p.IsPrivate, p.ShowWallets, p.ShowCommunities, p.ShowCommunityPosts, id)
 	return err
 }
+
+// Search busca en la base de datos usando ILIKE para coincidencias insensibles a mayúsculas/minúsculas
+func (r *PostgresUserRepository) Search(query string) ([]domain.User, error) {
+	// Preparamos el patrón de búsqueda para que busque en cualquier parte del texto
+	searchPattern := "%" + query + "%"
+
+	sqlQuery := `
+        SELECT 
+            id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), 
+            risk_type, registration_date, is_private, show_wallets, show_communities, show_posts
+        FROM users 
+        WHERE first_name ILIKE $1 
+           OR last_name ILIKE $1 
+           OR email ILIKE $1
+        LIMIT 50
+    `
+
+	rows, err := r.db.Query(sqlQuery, searchPattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []domain.User
+
+	for rows.Next() {
+		var user domain.User
+
+		err := rows.Scan(
+			&user.ID,
+			&user.FirstName,
+			&user.LastName,
+			&user.Email,
+			&user.PasswordHash,
+			&user.GoogleID,
+			&user.RiskType,
+			&user.RegistrationDate,
+			&user.Privacy.IsPrivate,
+			&user.Privacy.ShowWallets,
+			&user.Privacy.ShowCommunities,
+			&user.Privacy.ShowCommunityPosts,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		users = append(users, user)
+	}
+
+	return users, rows.Err()
+}
