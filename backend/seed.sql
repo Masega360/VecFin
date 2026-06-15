@@ -88,3 +88,26 @@ BEGIN
 
   RAISE NOTICE 'Seed masivo completado: 50 usuarios, 80 wallets, ~320 assets, ~240 membresías, 30 transferencias';
 END $$;
+
+
+-- Seed del marketplace pool
+INSERT INTO market_pool (ticker, quantity) VALUES
+  ('BTC-USD', 50),
+  ('ETH-USD', 500),
+  ('SOL-USD', 10000),
+  ('ADA-USD', 100000),
+  ('DOGE-USD', 500000),
+  ('XRP-USD', 50000),
+  ('DOT-USD', 20000),
+  ('AVAX-USD', 5000),
+  ('MATIC-USD', 80000),
+  ('LINK-USD', 15000),
+  ('AAPL', 200),
+  ('MSFT', 150),
+  ('NVDA', 100),
+  ('TSLA', 300),
+  ('AMZN', 80),
+  ('GOOG', 60),
+  ('META', 120),
+  ('USDT', 1000000)
+ON CONFLICT (ticker) DO UPDATE SET quantity = market_pool.quantity + EXCLUDED.quantity;

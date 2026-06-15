@@ -17,6 +17,7 @@ import ChatTab from '@/components/tabs/ChatTab';
 import NewsTab from '@/components/tabs/NewsTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import LeaderboardTab from '@/components/tabs/LeaderboardTab';
+import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 // Para agregar una nueva tab:
@@ -54,6 +55,12 @@ const TABS: TabConfig[] = [
     label: 'Exchanges',
     icon: 'swap-horiz',
     component: ExchangesTab,
+  },
+  {
+    id: 'marketplace',
+    label: 'Mercado',
+    icon: 'storefront',
+    component: MarketplaceTab,
   },
   {
     id: 'simulator',
