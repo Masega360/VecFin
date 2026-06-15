@@ -227,7 +227,7 @@ export default function MarketplaceTab() {
             <TouchableOpacity key={w.id}
               style={[styles.walletChip, selectedWallet?.id === w.id && styles.walletChipActive]}
               onPress={() => { setSelectedWallet(w); loadWalletAssets(w.id); }}>
-              <Text style={[styles.walletChipText, selectedWallet?.id === w.id && styles.walletChipTextActive]} numberOfLines={1}>{w.name}</Text>
+              <Text style={[styles.walletChipText, selectedWallet?.id === w.id && styles.walletChipTextActive]}>{w.name || 'Wallet'}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -365,10 +365,10 @@ const styles = StyleSheet.create({
   title: { color: '#e0e0e0', fontSize: 20, fontWeight: '700' },
   sellBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#e74c3c20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e74c3c40' },
   sellBtnText: { color: '#e74c3c', fontWeight: '600', fontSize: 13 },
-  walletSelector: { maxHeight: 40, marginBottom: 8 },
-  walletChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#132238' },
+  walletSelector: { marginBottom: 8, paddingHorizontal: 16 },
+  walletChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#132238' },
   walletChipActive: { backgroundColor: '#00ADD830', borderWidth: 1, borderColor: '#00ADD8' },
-  walletChipText: { color: '#4a6a80', fontSize: 12, fontWeight: '600', maxWidth: 120 },
+  walletChipText: { color: '#8aaabf', fontSize: 12, fontWeight: '600' },
   walletChipTextActive: { color: '#00ADD8' },
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f1f35', borderRadius: 10, padding: 14, marginBottom: 8 },
   cardTicker: { color: '#e0e0e0', fontSize: 16, fontWeight: '700' },
