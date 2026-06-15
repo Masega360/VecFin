@@ -59,11 +59,13 @@ const formatQty = (n: number) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function WalletDetailScreen() {
-  const { walletId, walletName } = useLocalSearchParams<{
+  const { walletId, walletName, myRole } = useLocalSearchParams<{
     walletId: string;
     walletName: string;
+    myRole: string;
   }>();
   const router = useRouter();
+  const canOperate = myRole === 'owner' || myRole === 'admin';
 
   // details + assets (valuados)
   const [details,   setDetails]   = useState<WalletDetails | null>(null);
@@ -488,6 +490,28 @@ export default function WalletDetailScreen() {
         </View>
       )}
 
+      {/* Actions: Members & Transfers */}
+      {!loading && (
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.navBtn}
+            onPress={() => router.push({ pathname: '/wallet-members', params: { walletId, walletName } })}
+          >
+            <MaterialIcons name="people" size={18} color="#00ADD8" />
+            <Text style={styles.navBtnText}>Miembros</Text>
+          </TouchableOpacity>
+          {canOperate && (
+            <TouchableOpacity
+              style={styles.navBtn}
+              onPress={() => router.push({ pathname: '/wallet-transfers', params: { walletId, walletName } })}
+            >
+              <MaterialIcons name="swap-horiz" size={18} color="#00ADD8" />
+              <Text style={styles.navBtnText}>Transferencias</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {/* Assets list */}
       {loading ? (
         <ActivityIndicator size="large" color="#00ADD8" style={{ marginTop: 60 }} />
@@ -578,9 +602,11 @@ export default function WalletDetailScreen() {
       )}
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setView('addAsset')} activeOpacity={0.8}>
-        <MaterialIcons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      {canOperate && (
+        <TouchableOpacity style={styles.fab} onPress={() => setView('addAsset')} activeOpacity={0.8}>
+          <MaterialIcons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {/* Confirm delete modal (reemplaza Alert.alert porque no anda en react-native-web) */}
       <Modal
@@ -857,4 +883,12 @@ const styles = StyleSheet.create({
     color: '#8aaabf', fontSize: 11, marginTop: 2,
     letterSpacing: 0.5,
   },
+  actionsRow: {
+    flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 10,
+  },
+  navBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, backgroundColor: '#132238', borderRadius: 10, paddingVertical: 10,
+  },
+  navBtnText: { color: '#00ADD8', fontSize: 13, fontWeight: '600' },
 });

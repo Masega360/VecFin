@@ -28,7 +28,16 @@ type WalletUsecasePort interface {
 	RemoveAsset(ctx context.Context, walletID, userID uuid.UUID, ticker string) error
 	GetWalletDetails(ctx context.Context, walletID, userID uuid.UUID) (domain.WalletDetails, error)
 
-	ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error) //caso de uso con follow
+	ShowUserWallets(ctx context.Context, viewerID, targetID uuid.UUID) ([]domain.Wallet, error)
+
+	// Transferencias
+	Transfer(ctx context.Context, userID uuid.UUID, t domain.Transfer) (uuid.UUID, error)
+	ListTransfers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.Transfer, error)
+
+	// Miembros
+	AddMember(ctx context.Context, walletID, requesterID, targetID uuid.UUID, role domain.WalletRole) error
+	RemoveMember(ctx context.Context, walletID, requesterID, targetID uuid.UUID) error
+	ListMembers(ctx context.Context, walletID, userID uuid.UUID) ([]domain.WalletMemberView, error)
 }
 
 type WalletHandler struct {
@@ -57,6 +66,15 @@ func (h *WalletHandler) RegisterRoutes(jwtSecret string) {
 	http.HandleFunc("DELETE /wallets/{id}/assets/{ticker}", auth(h.RemoveAsset))
 
 	http.HandleFunc("GET /users/{target_id}/wallets", auth(h.GetPublicWallets))
+
+	// Transferencias
+	http.HandleFunc("POST /wallets/{id}/transfers", auth(h.CreateTransfer))
+	http.HandleFunc("GET /wallets/{id}/transfers", auth(h.ListTransfers))
+
+	// Miembros colaborativos
+	http.HandleFunc("POST /wallets/{id}/members", auth(h.AddMember))
+	http.HandleFunc("GET /wallets/{id}/members", auth(h.ListMembers))
+	http.HandleFunc("DELETE /wallets/{id}/members/{user_id}", auth(h.RemoveMember))
 }
 
 // userIDFromContext extrae y parsea el user_id que dejó el middleware JWT en el contexto.
@@ -114,7 +132,7 @@ func (h *WalletHandler) CreateManual(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, err := h.uc.Create(r.Context(), domain.Wallet{
-		UserID:     userID,
+		CreatorID:  userID,
 		PlatformID: platformID,
 		Name:       body.Name,
 	})
@@ -158,7 +176,7 @@ func (h *WalletHandler) CreateConnected(w http.ResponseWriter, r *http.Request) 
 	}
 
 	id, err := h.uc.Create(r.Context(), domain.Wallet{
-		UserID:     userID,
+		CreatorID:  userID,
 		PlatformID: platformID,
 		Name:       body.Name,
 		APIKey:     &body.APIKey,
@@ -458,7 +476,7 @@ func (h *WalletHandler) GetWalletDetails(w http.ResponseWriter, r *http.Request)
 
 type PublicWalletResponse struct {
 	ID         uuid.UUID `json:"id"`
-	UserID     uuid.UUID `json:"user_id"`
+	CreatorID  uuid.UUID `json:"creator_id"`
 	PlatformID uuid.UUID `json:"platform_id"`
 	Name       string    `json:"name"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -489,7 +507,7 @@ func (h *WalletHandler) GetPublicWallets(w http.ResponseWriter, r *http.Request)
 	for _, wllt := range wallets {
 		res = append(res, PublicWalletResponse{
 			ID:         wllt.ID,
-			UserID:     wllt.UserID,
+			CreatorID:  wllt.CreatorID,
 			PlatformID: wllt.PlatformID,
 			Name:       wllt.Name,
 			CreatedAt:  wllt.CreatedAt,
@@ -503,4 +521,166 @@ func (h *WalletHandler) GetPublicWallets(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
+}
+
+// ─── TRANSFERENCIAS ──────────────────────────────────────────────────────────
+
+func (h *WalletHandler) CreateTransfer(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	fromWalletID, err := walletIDFromPath(r)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		ToWalletID string  `json:"to_wallet_id"`
+		Ticker     string  `json:"ticker"`
+		Quantity   float64 `json:"quantity"`
+		Note       string  `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
+		return
+	}
+	toID, err := uuid.Parse(body.ToWalletID)
+	if err != nil {
+		http.Error(w, "to_wallet_id inválido", http.StatusBadRequest)
+		return
+	}
+
+	id, err := h.uc.Transfer(r.Context(), userID, domain.Transfer{
+		FromWalletID: fromWalletID,
+		ToWalletID:   toID,
+		Ticker:       body.Ticker,
+		Quantity:     body.Quantity,
+		Note:         body.Note,
+	})
+	if err != nil {
+		handleUsecaseErr(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
+}
+
+func (h *WalletHandler) ListTransfers(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	walletID, err := walletIDFromPath(r)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	transfers, err := h.uc.ListTransfers(r.Context(), walletID, userID)
+	if err != nil {
+		handleUsecaseErr(w, err)
+		return
+	}
+	if transfers == nil {
+		transfers = []domain.Transfer{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(transfers)
+}
+
+// ─── MIEMBROS ────────────────────────────────────────────────────────────────
+
+func (h *WalletHandler) AddMember(w http.ResponseWriter, r *http.Request) {
+	requesterID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	walletID, err := walletIDFromPath(r)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		UserID string `json:"user_id"`
+		Role   string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
+		return
+	}
+	targetID, err := uuid.Parse(body.UserID)
+	if err != nil {
+		http.Error(w, "user_id inválido", http.StatusBadRequest)
+		return
+	}
+
+	role := domain.WalletRole(body.Role)
+	if role != domain.WalletRoleAdmin && role != domain.WalletRoleViewer {
+		http.Error(w, "role debe ser 'admin' o 'viewer'", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.uc.AddMember(r.Context(), walletID, requesterID, targetID, role); err != nil {
+		handleUsecaseErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *WalletHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	walletID, err := walletIDFromPath(r)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	members, err := h.uc.ListMembers(r.Context(), walletID, userID)
+	if err != nil {
+		handleUsecaseErr(w, err)
+		return
+	}
+	if members == nil {
+		members = []domain.WalletMemberView{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(members)
+}
+
+func (h *WalletHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	requesterID, err := userIDFromContext(r)
+	if err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	walletID, err := walletIDFromPath(r)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+	targetID, err := uuid.Parse(r.PathValue("user_id"))
+	if err != nil {
+		http.Error(w, "user_id inválido", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.uc.RemoveMember(r.Context(), walletID, requesterID, targetID); err != nil {
+		handleUsecaseErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
