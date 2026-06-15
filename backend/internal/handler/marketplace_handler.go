@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
@@ -130,6 +131,8 @@ func (h *MarketplaceHandler) Buy(w http.ResponseWriter, r *http.Request) {
 	tx.ExecContext(r.Context(), `INSERT INTO market_pool (ticker, quantity) VALUES ($1,$2) ON CONFLICT (ticker) DO UPDATE SET quantity = market_pool.quantity + $2`, body.PayTicker, payQuantity)
 	tx.ExecContext(r.Context(), `INSERT INTO market_trade (user_id, wallet_id, side, ticker, quantity, price_usd, total_usd, pay_ticker, pay_quantity) VALUES ($1,$2,'buy',$3,$4,$5,$6,$7,$8)`,
 		userID, walletID, body.Ticker, body.Quantity, buyDetails.Price, totalUSD, body.PayTicker, payQuantity)
+	tx.ExecContext(r.Context(), `INSERT INTO transfer (from_wallet_id, to_wallet_id, ticker, quantity, note, created_by) VALUES ($1,$1,$2,$3,$4,$5)`,
+		walletID, body.Ticker, body.Quantity, fmt.Sprintf("Compra en marketplace: pagó %.4f %s", payQuantity, body.PayTicker), userID)
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -193,6 +196,8 @@ func (h *MarketplaceHandler) Sell(w http.ResponseWriter, r *http.Request) {
 	tx.ExecContext(r.Context(), `INSERT INTO asset_wallet (wallet_id, ticker, quantity) VALUES ($1,'USDT',$2) ON CONFLICT (wallet_id, ticker) DO UPDATE SET quantity = asset_wallet.quantity + $2`, walletID, totalUSD)
 	tx.ExecContext(r.Context(), `INSERT INTO market_trade (user_id, wallet_id, side, ticker, quantity, price_usd, total_usd, pay_ticker, pay_quantity) VALUES ($1,$2,'sell',$3,$4,$5,$6,'USDT',$6)`,
 		userID, walletID, body.Ticker, body.Quantity, details.Price, totalUSD)
+	tx.ExecContext(r.Context(), `INSERT INTO transfer (from_wallet_id, to_wallet_id, ticker, quantity, note, created_by) VALUES ($1,$1,$2,$3,$4,$5)`,
+		walletID, body.Ticker, body.Quantity, fmt.Sprintf("Venta en marketplace: recibió %.2f USDT", totalUSD), userID)
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json")

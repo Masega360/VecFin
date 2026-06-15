@@ -196,7 +196,7 @@ func main() {
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
-		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
+		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletMemberRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {

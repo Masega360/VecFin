@@ -25,7 +25,7 @@ type chatUserRepository interface {
 }
 
 type chatWalletRepository interface {
-	ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error)
+	ListWalletsByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error)
 }
 
 type chatAssetWalletRepository interface {
@@ -169,20 +169,20 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Usuario: %s %s | Perfil de riesgo: %s\n", user.FirstName, user.LastName, user.RiskType)
 
-	wallets, err := uc.wallets.ListByUser(ctx, userID)
+	wallets, err := uc.wallets.ListWalletsByUser(ctx, userID)
 	if err != nil || len(wallets) == 0 {
 		return sb.String()
 	}
 
 	var totalUSD float64
 	var tickers []string
-	sb.WriteString("Wallets y activos:\n")
+	sb.WriteString("Wallets y activos (rol entre paréntesis — owner/admin pueden operar, viewer solo lectura):\n")
 	for _, w := range wallets {
 		assets, err := uc.assetWallet.ListByWallet(ctx, w.ID)
 		if err != nil || len(assets) == 0 {
 			continue
 		}
-		fmt.Fprintf(&sb, "- %s: ", w.Name)
+		fmt.Fprintf(&sb, "- %s [%s]: ", w.Name, w.MyRole)
 		items := make([]string, 0, len(assets))
 		for _, a := range assets {
 			tickers = append(tickers, a.Ticker)

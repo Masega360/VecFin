@@ -210,6 +210,9 @@ export default function MarketplaceTab() {
   const formatUSD = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
   const maxPayAvailable = walletAssets.find(a => a.ticker === payTicker)?.quantity || 0;
   const maxSellAvailable = walletAssets.find(a => a.ticker === selectedTicker)?.quantity || 0;
+  const insufficientFunds = modalMode === 'buy'
+    ? (parseFloat(payQty) > maxPayAvailable && payTicker !== '')
+    : (parseFloat(sellQty) > maxSellAvailable && selectedTicker !== '');
 
   return (
     <View style={styles.root}>
@@ -295,13 +298,12 @@ export default function MarketplaceTab() {
                   {payTicker ? (
                     <>
                       <Text style={styles.inputLabel}>Voy a pagar ({payTicker})</Text>
-                      <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a6a80"
+                      <TextInput style={[styles.input, parseFloat(payQty) > maxPayAvailable ? styles.inputError : null]}
+                        placeholder="0.00" placeholderTextColor="#4a6a80"
                         value={payQty} onChangeText={onPayQtyChange} keyboardType="decimal-pad" />
-                      {maxPayAvailable > 0 && (
-                        <Text style={styles.availableHint}>Disponible: {maxPayAvailable.toFixed(4)} {payTicker}</Text>
-                      )}
+                      <Text style={styles.availableHint}>Disponible: {maxPayAvailable.toFixed(4)} {payTicker}</Text>
                       {parseFloat(payQty) > maxPayAvailable && (
-                        <Text style={styles.errorHint}>Saldo insuficiente</Text>
+                        <Text style={styles.errorHint}>⚠ Fondos insuficientes — máx {maxPayAvailable.toFixed(4)} {payTicker}</Text>
                       )}
                     </>
                   ) : null}
@@ -323,13 +325,12 @@ export default function MarketplaceTab() {
                   {selectedTicker ? (
                     <>
                       <Text style={styles.inputLabel}>Cantidad a vender</Text>
-                      <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a6a80"
+                      <TextInput style={[styles.input, parseFloat(sellQty) > maxSellAvailable ? styles.inputError : null]}
+                        placeholder="0.00" placeholderTextColor="#4a6a80"
                         value={sellQty} onChangeText={onSellQtyChange} keyboardType="decimal-pad" />
-                      {maxSellAvailable > 0 && (
-                        <Text style={styles.availableHint}>Disponible: {maxSellAvailable.toFixed(4)}</Text>
-                      )}
+                      <Text style={styles.availableHint}>Disponible: {maxSellAvailable.toFixed(4)}</Text>
                       {parseFloat(sellQty) > maxSellAvailable && (
-                        <Text style={styles.errorHint}>Saldo insuficiente</Text>
+                        <Text style={styles.errorHint}>⚠ Fondos insuficientes — máx {maxSellAvailable.toFixed(4)}</Text>
                       )}
                       {receiveUsd ? (
                         <View style={styles.receiveBox}>
@@ -344,9 +345,9 @@ export default function MarketplaceTab() {
               )}
 
               <TouchableOpacity
-                style={[styles.executeBtn, submitting && { opacity: 0.5 }]}
-                onPress={execute}
-                disabled={submitting}
+                style={[styles.executeBtn, (submitting || insufficientFunds) && { opacity: 0.4 }]}
+                onPress={insufficientFunds ? () => Alert.alert('Fondos insuficientes', 'No tenés suficiente saldo para esta operación') : execute}
+                disabled={submitting || insufficientFunds}
               >
                 {submitting ? <ActivityIndicator color="#fff" size="small" /> :
                   <Text style={styles.executeBtnText}>
@@ -385,6 +386,7 @@ const styles = StyleSheet.create({
   modalTitle: { color: '#e0e0e0', fontSize: 18, fontWeight: '700' },
   inputLabel: { color: '#8aaabf', fontSize: 12, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: '#132238', color: '#e0e0e0', borderRadius: 8, padding: 14, fontSize: 18, fontWeight: '600' },
+  inputError: { borderWidth: 1, borderColor: '#e74c3c' },
   conversionHint: { color: '#2ecc71', fontSize: 12, marginTop: 4 },
   availableHint: { color: '#4a6a80', fontSize: 11, marginTop: 4 },
   errorHint: { color: '#e74c3c', fontSize: 11, marginTop: 4 },
