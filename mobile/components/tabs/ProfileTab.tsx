@@ -18,6 +18,15 @@ interface PrivacySettings {
   showCommunityPosts: boolean;
 }
 
+interface NotificationSettings {
+  priceAlerts: boolean;
+  communityActivity: boolean;
+  newMembers: boolean;
+  marketing: boolean;
+  followRequests: boolean;
+  enabledChannels: string[];
+}
+
 interface User {
   id: string;
   first_name: string;
@@ -29,7 +38,6 @@ interface User {
 
 type TabView = 'overview' | 'settings';
 
-// Mapeo útil para mostrar los riesgos en UI en español manteniendo el value del backend
 const RISK_LABELS: Record<string, string> = {
   conservative: 'Conservador',
   moderate: 'Moderado',
@@ -48,12 +56,17 @@ export default function ProfileTab() {
   // Estados para los Modales
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [riskModalVisible, setRiskModalVisible] = useState(false);
+  const [notificationsModalVisible, setNotificationsModalVisible] = useState(false); // Modal Notificaciones
 
-  // Estados para manejar las preferencias localmente en el Modal
+  // Estados locales para los settings
   const [privacy, setPrivacy] = useState<PrivacySettings>({
     isPrivate: false, showWallets: true, showCommunities: true, showCommunityPosts: true
   });
-  const [selectedRisk, setSelectedRisk] = useState<string>('moderate'); // Inicializado con el string del back
+  const [selectedRisk, setSelectedRisk] = useState<string>('moderate');
+
+  const [notifications, setNotifications] = useState<NotificationSettings>({
+    priceAlerts: false, communityActivity: false, newMembers: false, marketing: false, followRequests: true, enabledChannels: ['IN_APP']
+  });
 
   useFocusEffect(
       useCallback(() => {
@@ -68,13 +81,13 @@ export default function ProfileTab() {
     if (!token) return;
 
     try {
+      // 1. Fetch del Perfil
       const resProfile = await fetch(`${API_URL}/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (resProfile.ok) {
         const userData = await resProfile.json();
 
-        // 1. Transformamos la privacidad de snake_case a camelCase ANTES de hacer setUser
         if (userData.privacy) {
           const mappedPrivacy = {
             isPrivate: userData.privacy.is_private ?? false,
@@ -82,22 +95,16 @@ export default function ProfileTab() {
             showCommunities: userData.privacy.show_communities ?? false,
             showCommunityPosts: userData.privacy.show_community_posts ?? false,
           };
-
-          // Sobrescribimos el objeto en userData para que coincida con React
           userData.privacy = mappedPrivacy;
-
-          // Actualizamos el estado inicial del modal
           setPrivacy(mappedPrivacy);
         }
-
-        // 2. Ahora sí, guardamos el usuario con las keys corregidas
         setUser(userData);
-
         if (userData.risk_type) setSelectedRisk(userData.risk_type);
       } else {
         setError('No se pudo cargar el perfil');
       }
 
+      // 2. Fetch de Solicitudes de Seguimiento
       const resRequests = await fetch(`${API_URL}/users/me/follow-requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -105,6 +112,22 @@ export default function ProfileTab() {
         const data = await resRequests.json();
         setPendingRequests(Array.isArray(data) ? data : []);
       }
+
+      const resNotif = await fetch(`${API_URL}/notifications/settings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resNotif.ok) {
+        const notifData = await resNotif.json();
+        setNotifications({
+          priceAlerts: notifData.price_alerts ?? false,
+          communityActivity: notifData.community_activity ?? false,
+          newMembers: notifData.new_members ?? false,
+          marketing: notifData.marketing ?? false,
+          followRequests: notifData.follow_requests ?? false,
+          enabledChannels: notifData.enabled_channels || [],
+        });
+      }
+
     } catch {
       setError('Sin conexión al servidor');
     } finally {
@@ -219,17 +242,10 @@ export default function ProfileTab() {
       });
 
       if (res.ok) {
-        // ACTUALIZAMOS EL ESTADO LOCAL DEL USUARIO
         setUser({
           ...user,
-          privacy: {
-            isPrivate: privacy.isPrivate,
-            showWallets: privacy.showWallets,
-            showCommunities: privacy.showCommunities,
-            showCommunityPosts: privacy.showCommunityPosts
-          }
+          privacy: { ...privacy }
         });
-
         setPrivacyModalVisible(false);
         Alert.alert('Éxito', 'Preferencias de privacidad guardadas.');
       } else {
@@ -244,7 +260,6 @@ export default function ProfileTab() {
     if (!user) return;
     try {
       const token = await getValidToken();
-      // Apunta a la ruta registrada en el handler de Go: PUT /users/{id}/risk
       const res = await fetch(`${API_URL}/users/${user.id}/risk`, {
         method: 'PUT',
         headers: {
@@ -264,6 +279,46 @@ export default function ProfileTab() {
     } catch {
       Alert.alert('Error', 'Problema de conexión');
     }
+  };
+
+  const handleSaveNotifications = async () => {
+    try {
+      const token = await getValidToken();
+      const res = await fetch(`${API_URL}/notifications/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          price_alerts: notifications.priceAlerts,
+          community_activity: notifications.communityActivity,
+          new_members: notifications.newMembers,
+          marketing: notifications.marketing,
+          follow_requests: notifications.followRequests,
+          enabled_channels: notifications.enabledChannels
+        })
+      });
+
+      if (res.ok) {
+        setNotificationsModalVisible(false);
+        Alert.alert('Éxito', 'Preferencias de notificaciones actualizadas.');
+      } else {
+        Alert.alert('Error', 'No se pudieron guardar las notificaciones');
+      }
+    } catch {
+      Alert.alert('Error', 'Problema de conexión');
+    }
+  };
+
+  // Función auxiliar para activar/desactivar canales
+  const toggleChannel = (channel: string) => {
+    setNotifications(prev => {
+      const channels = prev.enabledChannels.includes(channel)
+          ? prev.enabledChannels.filter(c => c !== channel)
+          : [...prev.enabledChannels, channel];
+      return { ...prev, enabledChannels: channels };
+    });
   };
 
   if (loading) return <ActivityIndicator size="large" color="#00ADD8" style={s.loader} />;
@@ -414,6 +469,14 @@ export default function ProfileTab() {
                 <MaterialIcons name="chevron-right" size={20} color="#3d5a70" />
               </TouchableOpacity>
 
+              <TouchableOpacity style={s.settingItem} onPress={() => setNotificationsModalVisible(true)}>
+                <View style={s.settingItemLeft}>
+                  <MaterialIcons name="notifications" size={20} color="#aab8c8" />
+                  <Text style={s.settingItemText}>Notificaciones</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#3d5a70" />
+              </TouchableOpacity>
+
               <TouchableOpacity style={s.settingItem} onPress={() => setRiskModalVisible(true)}>
                 <View style={s.settingItemLeft}>
                   <MaterialIcons name="trending-up" size={20} color="#aab8c8" />
@@ -496,6 +559,84 @@ export default function ProfileTab() {
           </View>
         </Modal>
 
+        <Modal visible={notificationsModalVisible} transparent animationType="slide">
+          <View style={s.modalOverlay}>
+            <View style={s.modalContent}>
+              <Text style={s.modalTitle}>Notificaciones</Text>
+
+              <Text style={s.sectionSubtitle}>¿Dónde querés recibirlas?</Text>
+              <View style={s.channelRow}>
+                {['IN_APP', 'EMAIL'].map(channel => {
+                  const isActive = notifications.enabledChannels.includes(channel);
+                  const labels: Record<string, string> = { IN_APP: 'En la app', EMAIL: 'Email' };
+                  return (
+                      <TouchableOpacity
+                          key={channel}
+                          style={[s.channelPill, isActive && s.channelPillActive]}
+                          onPress={() => toggleChannel(channel)}
+                      >
+                        <Text style={[s.channelText, isActive && s.channelTextActive]}>{labels[channel]}</Text>
+                      </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={s.sectionSubtitle}>¿Qué querés recibir?</Text>
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                <View style={s.switchRow}>
+                  <Text style={s.switchLabel}>Alertas de Precio</Text>
+                  <Switch
+                      value={notifications.priceAlerts}
+                      onValueChange={(v) => setNotifications({...notifications, priceAlerts: v})}
+                      trackColor={{ false: '#1a2d42', true: '#00ADD8' }}
+                  />
+                </View>
+                <View style={s.switchRow}>
+                  <Text style={s.switchLabel}>Actividad de la Comunidad</Text>
+                  <Switch
+                      value={notifications.communityActivity}
+                      onValueChange={(v) => setNotifications({...notifications, communityActivity: v})}
+                      trackColor={{ false: '#1a2d42', true: '#00ADD8' }}
+                  />
+                </View>
+                <View style={s.switchRow}>
+                  <Text style={s.switchLabel}>Nuevos Miembros</Text>
+                  <Switch
+                      value={notifications.newMembers}
+                      onValueChange={(v) => setNotifications({...notifications, newMembers: v})}
+                      trackColor={{ false: '#1a2d42', true: '#00ADD8' }}
+                  />
+                </View>
+                <View style={s.switchRow}>
+                  <Text style={s.switchLabel}>Marketing y Promos</Text>
+                  <Switch
+                      value={notifications.marketing}
+                      onValueChange={(v) => setNotifications({...notifications, marketing: v})}
+                      trackColor={{ false: '#1a2d42', true: '#00ADD8' }}
+                  />
+                </View>
+                <View style={s.switchRow}>
+                  <Text style={s.switchLabel}>Solicitudes de Seguimiento</Text>
+                  <Switch
+                      value={notifications.followRequests}
+                      onValueChange={(v) => setNotifications({...notifications, followRequests: v})}
+                      trackColor={{ false: '#1a2d42', true: '#00ADD8' }}
+                  />
+                </View>
+              </ScrollView>
+
+              <View style={s.modalActions}>
+                <TouchableOpacity style={s.modalBtnCancel} onPress={() => setNotificationsModalVisible(false)}>
+                  <Text style={s.modalBtnTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.modalBtnSave} onPress={handleSaveNotifications}>
+                  <Text style={s.modalBtnTextSave}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* ── MODAL: Perfil de Riesgo ── */}
         <Modal visible={riskModalVisible} transparent animationType="fade">
           <View style={s.modalOverlay}>
@@ -542,22 +683,14 @@ const s = StyleSheet.create({
 
   container: { flex: 1, padding: 16, backgroundColor: '#080f1a' },
 
-
-
   toggle: {
-
     flexDirection: 'row', marginBottom: 16, backgroundColor: '#0d1826',
-
     borderRadius: 14, padding: 4, borderWidth: 1, borderColor: '#1a2d42',
-
   },
 
   toggleBtn: {
-
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-
     gap: 6, paddingVertical: 10, borderRadius: 10,
-
   },
 
   toggleBtnActive: { backgroundColor: '#111e2e' },
@@ -566,36 +699,22 @@ const s = StyleSheet.create({
 
   toggleBtnTextActive: { color: '#e8f4f8' },
 
-
-
   errorBox: {
-
     flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff0f0',
-
     borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#ffd0d0',
-
   },
 
   errorText: { color: '#cc2222', fontSize: 13, flex: 1 },
 
-
-
   card: {
-
     backgroundColor: '#111e2e', borderRadius: 20, padding: 28, alignItems: 'center',
-
     borderWidth: 1, borderColor: '#1a2d42', marginBottom: 24,
-
   },
 
   avatar: {
-
     width: 80, height: 80, borderRadius: 40, backgroundColor: '#0a2a40',
-
     borderWidth: 2, borderColor: '#00ADD8', justifyContent: 'center',
-
     alignItems: 'center', marginBottom: 14,
-
   },
 
   avatarText: { color: '#00ADD8', fontSize: 28, fontWeight: '700' },
@@ -605,67 +724,43 @@ const s = StyleSheet.create({
   email: { color: '#7a9ab0', fontSize: 14 },
 
   riskBadge: {
-
     marginTop: 10, backgroundColor: '#0a2a40', borderRadius: 20,
-
     paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1, borderColor: '#1a2d42',
-
   },
 
   riskText: { color: '#00ADD8', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
 
-
-
   sectionHeader: {
-
     flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 4,
-
   },
 
   sectionTitle: { color: '#e8f4f8', fontSize: 16, fontWeight: '700' },
 
   badge: {
-
     backgroundColor: '#00ADD8', borderRadius: 10, paddingHorizontal: 6,
-
     paddingVertical: 2, justifyContent: 'center', alignItems: 'center',
-
   },
 
   badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
 
-
-
   emptyBox: {
-
     alignItems: 'center', padding: 24, backgroundColor: '#0d1826',
-
     borderRadius: 14, borderWidth: 1, borderColor: '#1a2d42', borderStyle: 'dashed',
-
   },
 
   emptyText: { color: '#7a9ab0', fontSize: 14, marginTop: 8 },
 
-
-
   requestCard: {
-
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-
     backgroundColor: '#111e2e', padding: 14, borderRadius: 14,
-
     borderWidth: 1, borderColor: '#1a2d42', marginBottom: 10,
-
   },
 
   requestInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
 
   requestAvatar: {
-
     width: 40, height: 40, borderRadius: 20, backgroundColor: '#1a2d42',
-
     alignItems: 'center', justifyContent: 'center',
-
   },
 
   requestAvatarText: { color: '#aab8c8', fontSize: 16, fontWeight: '700' },
@@ -677,35 +772,23 @@ const s = StyleSheet.create({
   requestActions: { flexDirection: 'row', gap: 8 },
 
   actionBtn: {
-
     width: 36, height: 36, borderRadius: 18, alignItems: 'center',
-
     justifyContent: 'center', borderWidth: 1,
-
   },
 
   actionBtnReject: { backgroundColor: 'rgba(255,77,79,0.1)', borderColor: 'rgba(255,77,79,0.3)' },
 
   actionBtnAccept: { backgroundColor: 'rgba(0,210,106,0.1)', borderColor: 'rgba(0,210,106,0.3)' },
 
-
-
   settingsGroupTitle: {
-
     color: '#7a9ab0', fontSize: 12, fontWeight: '700', textTransform: 'uppercase',
-
     letterSpacing: 0.6, marginBottom: 8, marginTop: 16, paddingHorizontal: 4,
-
   },
 
   settingItem: {
-
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-
     backgroundColor: '#111e2e', padding: 16, borderRadius: 14,
-
     borderWidth: 1, borderColor: '#1a2d42', marginBottom: 8,
-
   },
 
   settingItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -714,48 +797,32 @@ const s = StyleSheet.create({
 
   settingItemDanger: { borderColor: 'rgba(255,77,79,0.3)', backgroundColor: '#0d1826' },
 
-
-
-  // Estilos nuevos para los Modales
-
+  // Estilos para Modales
   modalOverlay: {
-
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20
-
   },
 
   modalContent: {
-
     backgroundColor: '#111e2e', width: '100%', borderRadius: 20, padding: 24,
-
-    borderWidth: 1, borderColor: '#1a2d42'
-
+    borderWidth: 1, borderColor: '#1a2d42', maxHeight: '85%' // Limita altura para scroll interno
   },
 
   modalTitle: { color: '#e8f4f8', fontSize: 20, fontWeight: '700', marginBottom: 20, textAlign: 'center' },
 
   modalSubtitle: { color: '#7a9ab0', fontSize: 14, marginBottom: 20, textAlign: 'center' },
 
-
+  sectionSubtitle: { color: '#e8f4f8', fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 12 },
 
   switchRow: {
-
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-
     paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a2d42'
-
   },
 
   switchLabel: { color: '#e8f4f8', fontSize: 15 },
 
-
-
   radioBtn: {
-
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16,
-
     borderRadius: 12, borderWidth: 1, borderColor: '#1a2d42', marginBottom: 10
-
   },
 
   radioBtnActive: { borderColor: '#00ADD8', backgroundColor: 'rgba(0, 173, 216, 0.1)' },
@@ -764,24 +831,31 @@ const s = StyleSheet.create({
 
   radioTextActive: { color: '#00ADD8', fontWeight: '600' },
 
-
+  // Estilos de los canales (pills)
+  channelRow: {
+    flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap'
+  },
+  channelPill: {
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20,
+    borderWidth: 1, borderColor: '#1a2d42', backgroundColor: '#0d1826'
+  },
+  channelPillActive: {
+    borderColor: '#00ADD8', backgroundColor: 'rgba(0, 173, 216, 0.1)'
+  },
+  channelText: { color: '#7a9ab0', fontSize: 13, fontWeight: '500' },
+  channelTextActive: { color: '#00ADD8', fontWeight: 'bold' },
 
   modalActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 24 },
 
   modalBtnCancel: {
-
     flex: 1, padding: 14, borderRadius: 12, alignItems: 'center',
-
     backgroundColor: '#0d1826', borderWidth: 1, borderColor: '#1a2d42'
-
   },
 
   modalBtnTextCancel: { color: '#aab8c8', fontWeight: '600' },
 
   modalBtnSave: {
-
     flex: 1, padding: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#00ADD8'
-
   },
 
   modalBtnTextSave: { color: '#ffffff', fontWeight: 'bold' }
