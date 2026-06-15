@@ -27,6 +27,7 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
 	"github.com/Masega360/vecfin/backend/internal/platform/news"
 	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
+	"github.com/Masega360/vecfin/backend/internal/platform/cache"
 	"github.com/Masega360/vecfin/backend/internal/platform/yahoo"
 	"github.com/Masega360/vecfin/backend/internal/repository"
 	"github.com/Masega360/vecfin/backend/internal/usecase"
@@ -103,7 +104,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authUC)
 	authHandler.RegisterRoutes()
 
-	yahooClient := yahoo.NewClient()
+	yahooClient := cache.NewMarketCache(yahoo.NewClient(), 2*time.Minute)
 	binanceMarket := binance.NewClient()
 	assetRepo := repository.NewPostgresAssetRepository(db)
 	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket)

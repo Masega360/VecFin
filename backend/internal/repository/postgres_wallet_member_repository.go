@@ -41,7 +41,7 @@ func (r *PostgresWalletMemberRepository) GetRole(ctx context.Context, walletID, 
 
 func (r *PostgresWalletMemberRepository) ListMembers(ctx context.Context, walletID uuid.UUID) ([]domain.WalletMemberView, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT wm.wallet_id, wm.user_id, wm.role, wm.joined_at, u.first_name, u.last_name
+		SELECT wm.wallet_id, wm.user_id, wm.role, wm.joined_at, u.first_name, u.last_name, u.email
 		FROM wallet_member wm JOIN users u ON wm.user_id = u.id
 		WHERE wm.wallet_id = $1`, walletID)
 	if err != nil {
@@ -51,7 +51,7 @@ func (r *PostgresWalletMemberRepository) ListMembers(ctx context.Context, wallet
 	var members []domain.WalletMemberView
 	for rows.Next() {
 		var m domain.WalletMemberView
-		if err := rows.Scan(&m.WalletID, &m.UserID, &m.Role, &m.JoinedAt, &m.FirstName, &m.LastName); err != nil {
+		if err := rows.Scan(&m.WalletID, &m.UserID, &m.Role, &m.JoinedAt, &m.FirstName, &m.LastName, &m.Email); err != nil {
 			return nil, err
 		}
 		members = append(members, m)
@@ -61,7 +61,7 @@ func (r *PostgresWalletMemberRepository) ListMembers(ctx context.Context, wallet
 
 func (r *PostgresWalletMemberRepository) ListWalletsByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT w.id, w.creator_id, w.platform_id, w.name, w.api_key, w.api_secret, w.created_at, w.last_sync
+		SELECT w.id, w.creator_id, w.platform_id, w.name, w.api_key, w.api_secret, w.created_at, w.last_sync, wm.role
 		FROM wallet w JOIN wallet_member wm ON w.id = wm.wallet_id
 		WHERE wm.user_id = $1 ORDER BY w.created_at DESC`, userID)
 	if err != nil {
@@ -72,7 +72,7 @@ func (r *PostgresWalletMemberRepository) ListWalletsByUser(ctx context.Context, 
 	for rows.Next() {
 		var w domain.Wallet
 		var lastSync sql.NullTime
-		if err := rows.Scan(&w.ID, &w.CreatorID, &w.PlatformID, &w.Name, &w.APIKey, &w.APISecret, &w.CreatedAt, &lastSync); err != nil {
+		if err := rows.Scan(&w.ID, &w.CreatorID, &w.PlatformID, &w.Name, &w.APIKey, &w.APISecret, &w.CreatedAt, &lastSync, &w.MyRole); err != nil {
 			return nil, err
 		}
 		if lastSync.Valid {

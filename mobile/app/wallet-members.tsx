@@ -12,6 +12,9 @@ interface Member {
   user_id: string;
   role: string;
   joined_at: string;
+  first_name: string;
+  last_name: string;
+  email: string;
 }
 
 export default function WalletMembersScreen() {
@@ -143,7 +146,8 @@ export default function WalletMembersScreen() {
             renderItem={({ item }) => (
               <View style={styles.memberCard}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.memberId} numberOfLines={1}>{item.user_id}</Text>
+                  <Text style={styles.memberName}>{item.first_name} {item.last_name}</Text>
+                  <Text style={styles.memberEmail}>{item.email}</Text>
                   <Text style={[styles.memberRole, { color: roleColor(item.role) }]}>
                     {item.role.toUpperCase()}
                   </Text>
@@ -177,8 +181,9 @@ const styles = StyleSheet.create({
   submitBtn: { backgroundColor: '#00ADD8', borderRadius: 8, padding: 12, alignItems: 'center' },
   submitText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   memberCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f1f35', borderRadius: 10, padding: 14, marginBottom: 10 },
-  memberId: { color: '#c0c0c0', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  memberRole: { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  memberName: { color: '#e0e0e0', fontSize: 15, fontWeight: '600' },
+  memberEmail: { color: '#4a6a80', fontSize: 12, marginTop: 2 },
+  memberRole: { fontSize: 11, fontWeight: '700', marginTop: 4 },
   empty: { color: '#4a6a80', textAlign: 'center', marginTop: 40 },
   error: { color: '#e74c3c', textAlign: 'center', marginTop: 40 },
 });

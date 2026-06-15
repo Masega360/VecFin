@@ -82,7 +82,7 @@ func (uc *WalletsUseCase) Create(ctx context.Context, wallet domain.Wallet) (uui
 }
 
 func (uc *WalletsUseCase) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Wallet, error) {
-	return uc.repo.ListByUser(ctx, userID)
+	return uc.memberRepo.ListWalletsByUser(ctx, userID)
 }
 
 // Read devuelve la wallet solo si pertenece al usuario del token.
@@ -262,18 +262,19 @@ func (uc *WalletsUseCase) RemoveAsset(
 }
 
 // GetWalletDetails devuelve la wallet con cada asset valuado al precio actual
-// y el total de la wallet. Si el market service falla para un ticker, el asset
-// se devuelve igualmente pero con Price=0 (no tira todo el endpoint).
+// y el total de la wallet. Usa fetch paralelo + cache para performance.
 func (uc *WalletsUseCase) GetWalletDetails(
 	ctx context.Context,
 	walletID, userID uuid.UUID,
 ) (domain.WalletDetails, error) {
+	// Autorización via wallet_member
+	if _, err := uc.memberRepo.GetRole(ctx, walletID, userID); err != nil {
+		return domain.WalletDetails{}, err
+	}
+
 	wallet, err := uc.repo.ReadWallet(ctx, walletID)
 	if err != nil {
 		return domain.WalletDetails{}, err
-	}
-	if wallet.CreatorID != userID {
-		return domain.WalletDetails{}, domain.ErrForbidden
 	}
 
 	assets, err := uc.assetsRepo.ListByWallet(ctx, walletID)
@@ -285,25 +286,49 @@ func (uc *WalletsUseCase) GetWalletDetails(
 	var total float64
 	var currency string
 
-	for _, a := range assets {
-		view := domain.WalletAssetView{
-			Ticker:   a.Ticker,
-			Quantity: a.Quantity,
+	if uc.market != nil && len(assets) > 0 {
+		// Fetch paralelo de precios
+		symbols := make([]string, len(assets))
+		for i, a := range assets {
+			symbols[i] = a.Ticker
 		}
-		if uc.market != nil {
-			// "1d" es el rango mínimo soportado por el proveedor Yahoo
-			if details, derr := uc.market.GetAssetDetails(a.Ticker, "1d"); derr == nil && details != nil {
-				view.Name = details.Name
-				view.Price = details.Price
-				view.Currency = details.Currency
-				view.MarketValue = a.Quantity * details.Price
+
+		type result struct {
+			idx     int
+			details *domain.AssetDetails
+		}
+		ch := make(chan result, len(assets))
+		for i, sym := range symbols {
+			go func(idx int, s string) {
+				d, _ := uc.market.GetAssetDetails(s, "1d")
+				ch <- result{idx, d}
+			}(i, sym)
+		}
+
+		detailsMap := make([]*domain.AssetDetails, len(assets))
+		for range assets {
+			r := <-ch
+			detailsMap[r.idx] = r.details
+		}
+
+		for i, a := range assets {
+			view := domain.WalletAssetView{Ticker: a.Ticker, Quantity: a.Quantity}
+			if d := detailsMap[i]; d != nil {
+				view.Name = d.Name
+				view.Price = d.Price
+				view.Currency = d.Currency
+				view.MarketValue = a.Quantity * d.Price
 				if currency == "" {
-					currency = details.Currency
+					currency = d.Currency
 				}
 			}
+			total += view.MarketValue
+			views = append(views, view)
 		}
-		total += view.MarketValue
-		views = append(views, view)
+	} else {
+		for _, a := range assets {
+			views = append(views, domain.WalletAssetView{Ticker: a.Ticker, Quantity: a.Quantity})
+		}
 	}
 
 	return domain.WalletDetails{

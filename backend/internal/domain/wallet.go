@@ -8,14 +8,15 @@ import (
 )
 
 type Wallet struct {
-	ID         uuid.UUID `json:"id"`
-	CreatorID  uuid.UUID `json:"creator_id"`
-	PlatformID uuid.UUID `json:"platform_id"`
-	Name       string    `json:"name"`
-	APIKey     *string   `json:"api_key,omitempty"`
-	APISecret  *string   `json:"-"`
-	CreatedAt  time.Time `json:"created_at"`
-	LastSync   time.Time `json:"last_sync"`
+	ID         uuid.UUID  `json:"id"`
+	CreatorID  uuid.UUID  `json:"creator_id"`
+	PlatformID uuid.UUID  `json:"platform_id"`
+	Name       string     `json:"name"`
+	APIKey     *string    `json:"api_key,omitempty"`
+	APISecret  *string    `json:"-"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastSync   time.Time  `json:"last_sync"`
+	MyRole     WalletRole `json:"my_role,omitempty"`
 }
 
 type WalletRole string
@@ -40,6 +41,7 @@ type WalletMemberView struct {
 	JoinedAt  time.Time  `json:"joined_at"`
 	FirstName string     `json:"first_name"`
 	LastName  string     `json:"last_name"`
+	Email     string     `json:"email"`
 }
 
 type CommunityWallet struct {
