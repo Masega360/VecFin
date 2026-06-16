@@ -323,6 +323,7 @@ function RoleBadge({ role }: { role: string }) {
 function MembersModal({ visible, communityID, myRole, myUserID, onClose }: {
     visible: boolean; communityID: string; myRole: string; myUserID: string; onClose: () => void;
 }) {
+    const router = useRouter();
     const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -378,7 +379,7 @@ function MembersModal({ visible, communityID, myRole, myUserID, onClose }: {
                     {loading ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 40 }} /> : (
                         <FlatList data={members} keyExtractor={m => m.user_id} contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 40 }}
                                   renderItem={({ item: m }) => (
-                                      <View style={mg.memberCard}>
+                                      <TouchableOpacity style={mg.memberCard} onPress={() => { onClose(); router.push({ pathname: '/user-profile', params: { userId: m.user_id } }); }} activeOpacity={0.7}>
                                           <View style={mg.memberAvatar}><Text style={mg.memberAvatarTxt}>{m.first_name.charAt(0).toUpperCase()}</Text></View>
                                           <View style={{ flex: 1 }}>
                                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={mg.memberName}>{m.first_name} {m.last_name}</Text><RoleBadge role={m.role} /></View>
@@ -392,7 +393,7 @@ function MembersModal({ visible, communityID, myRole, myUserID, onClose }: {
                                                   {canKick(m) && <TouchableOpacity style={[mg.actionBtn, { borderColor: '#e05c5c' }]} onPress={() => doKick(m)}><MaterialIcons name="person-remove" size={16} color="#e05c5c" /></TouchableOpacity>}
                                               </View>
                                           )}
-                                      </View>
+                                      </TouchableOpacity>
                                   )}
                                   ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60, gap: 10 }}><MaterialIcons name="people" size={48} color="#1e3a5a" /><Text style={{ color: '#3d5a70', fontSize: 14 }}>Sin miembros</Text></View>}
                         />
@@ -679,12 +680,12 @@ function ThreadModal({ visible, rootPost, isMember, myUserID, myRole, onClose, o
 
                     <ScrollView ref={scrollRef} contentContainerStyle={th.scroll} keyboardShouldPersistTaps="handled">
                         <View style={th.postBox}>
-                            <View style={s.postAuthorRow}>
+                            <TouchableOpacity style={s.postAuthorRow} onPress={() => router.push({ pathname: '/user-profile', params: { userId: frame.post.author_id } })} activeOpacity={0.7}>
                                 <View style={[s.postAvatar, depth > 0 && { width: 30, height: 30, borderRadius: 9 }]}>
                                     <Text style={[s.postAvatarText, depth > 0 && { fontSize: 12 }]}>{frame.post.author_name?.charAt(0).toUpperCase() ?? '?'}</Text>
                                 </View>
                                 <View><Text style={s.postAuthor}>{frame.post.author_name}</Text><Text style={s.postTime}>{timeAgo(frame.post.created_at)}</Text></View>
-                            </View>
+                            </TouchableOpacity>
                             {frame.post.title ? <Text style={[s.postTitle, { marginTop: 12 }]}>{frame.post.title}</Text> : null}
                             <Text style={[s.postContent, { marginTop: 8 }]}>{frame.post.content}</Text>
                             {frame.post.url ? <View style={[s.postUrlRow, { marginTop: 10 }]}><MaterialIcons name="link" size={13} color="#00b4d8" /><Text style={s.postUrl}>{frame.post.url}</Text></View> : null}
