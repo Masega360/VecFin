@@ -522,6 +522,7 @@ function ThreadModal({ visible, rootPost, isMember, myUserID, myRole, onClose, o
     myUserID: string; myRole: string; onClose: () => void;
     onPostEdited: (id: string, newTitle: string, newContent: string) => void;
 }) {
+    const router = useRouter();
     const [stack, setStack] = useState<StackFrame[]>([]);
     const scrollRef = useRef<ScrollView>(null);
     const { state: dlg, show: showDlg, hide: hideDlg } = useConfirm();
