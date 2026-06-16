@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { API_URL, getValidToken } from '@/utils/api';
 
 interface RankEntry {
@@ -24,6 +25,7 @@ const CATEGORIES: { id: Category; label: string; icon: keyof typeof MaterialIcon
 ];
 
 export default function LeaderboardTab() {
+  const router = useRouter();
   const [category, setCategory] = useState<Category>('portfolio');
   const [data, setData] = useState<RankEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +76,7 @@ export default function LeaderboardTab() {
           keyExtractor={item => item.user_id}
           contentContainerStyle={{ padding: 16 }}
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <TouchableOpacity style={styles.card} onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.user_id } })} activeOpacity={0.7}>
               <Text style={[styles.rank, { color: medalColor(item.rank) }]}>
                 {item.rank <= 3 ? '🏆' : `#${item.rank}`}
               </Text>
@@ -87,7 +89,8 @@ export default function LeaderboardTab() {
                   {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : '🥉'}
                 </Text>
               )}
-            </View>
+              <MaterialIcons name="chevron-right" size={20} color="#3d5a70" />
+            </TouchableOpacity>
           )}
           ListEmptyComponent={<Text style={styles.empty}>Sin datos aún</Text>}
         />
