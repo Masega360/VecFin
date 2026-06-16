@@ -57,7 +57,7 @@ export default function ProfileTab() {
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [riskModalVisible, setRiskModalVisible] = useState(false);
   const [notificationsModalVisible, setNotificationsModalVisible] = useState(false); // Modal Notificaciones
-
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   // Estados locales para los settings
   const [privacy, setPrivacy] = useState<PrivacySettings>({
     isPrivate: false, showWallets: true, showCommunities: true, showCommunityPosts: true
@@ -182,7 +182,6 @@ export default function ProfileTab() {
       setError('Sin conexión al servidor');
     }
   };
-
   const handleExportFiscal = async () => {
     const token = await getValidToken();
     if (!token) return;
@@ -497,7 +496,7 @@ export default function ProfileTab() {
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[s.settingItem, s.settingItemDanger]} onPress={handleDelete}>
+              <TouchableOpacity style={[s.settingItem, s.settingItemDanger]} onPress={() => setDeleteModalVisible(true)}>
                 <View style={s.settingItemLeft}>
                   <MaterialIcons name="delete-outline" size={20} color="#ff4d4f" />
                   <Text style={[s.settingItemText, { color: '#ff4d4f' }]}>Eliminar cuenta</Text>
@@ -507,6 +506,28 @@ export default function ProfileTab() {
               <View style={{ height: 20 }} />
             </ScrollView>
         )}
+
+        <Modal visible={deleteModalVisible} transparent animationType="fade">
+          <View style={s.modalOverlay}>
+            <View style={s.modalContent}>
+              <Text style={s.modalTitle}>Eliminar cuenta</Text>
+              <Text style={s.modalSubtitle}>
+                ¿Estás seguro de que querés eliminar tu cuenta de forma definitiva? Esta acción no se puede deshacer.
+              </Text>
+
+              <View style={s.modalActions}>
+                <TouchableOpacity style={s.modalBtnCancel} onPress={() => setDeleteModalVisible(false)}>
+                  <Text style={s.modalBtnTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+
+                {/* Este botón ejecuta tu función original con el fetch DELETE */}
+                <TouchableOpacity style={[s.modalBtnSave, { backgroundColor: '#ff4d4f' }]} onPress={handleDelete}>
+                  <Text style={s.modalBtnTextSave}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* ── MODAL: Privacidad ── */}
         <Modal visible={privacyModalVisible} transparent animationType="slide">

@@ -14,3 +14,5 @@ CREATE TABLE IF NOT EXISTS users (
     show_communities BOOLEAN DEFAULT false,
     show_posts BOOLEAN DEFAULT false
 );
+
+ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL;

@@ -18,6 +18,7 @@ type User struct {
 	RiskType         RiskType
 	RegistrationDate time.Time
 	Privacy          PrivacySettings
+	DeletedAt        *time.Time
 }
 
 type PrivacySettings struct {

@@ -7,6 +7,8 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
+import Markdown from 'react-native-markdown-display';
+import AppTextInput from '@/components/AppTextInput';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -688,7 +690,9 @@ function ThreadModal({ visible, rootPost, isMember, myUserID, myRole, onClose, o
                                 <View><Text style={s.postAuthor}>{frame.post.author_name}</Text><Text style={s.postTime}>{timeAgo(frame.post.created_at)}</Text></View>
                             </TouchableOpacity>
                             {frame.post.title ? <Text style={[s.postTitle, { marginTop: 12 }]}>{frame.post.title}</Text> : null}
-                            <Text style={[s.postContent, { marginTop: 8 }]}>{frame.post.content}</Text>
+                            <View style={{ marginTop: 8 }}>
+                                <Markdown style={markdownStyles}>{frame.post.content}</Markdown>
+                            </View>
                             {frame.post.url ? <View style={[s.postUrlRow, { marginTop: 10 }]}><MaterialIcons name="link" size={13} color="#00b4d8" /><Text style={s.postUrl}>{frame.post.url}</Text></View> : null}
                             <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1a2d42' }}>
                                 <View style={th.voteBar}>
@@ -868,7 +872,11 @@ function PostCard({ post, myRole, myUserID, voteState, onVote, onDeleteRequest, 
                 </View>
             </View>
             {post.title ? <Text style={s.postTitle}>{post.title}</Text> : null}
-            <Text style={s.postContent} numberOfLines={4}>{post.content}</Text>
+            <View style={{ maxHeight: 100, overflow: 'hidden' }}>
+                <Markdown style={markdownStyles}>
+                    {post.content}
+                </Markdown>
+            </View>
             {post.url ? <View style={s.postUrlRow}><MaterialIcons name="link" size={13} color="#00b4d8" /><Text style={s.postUrl} numberOfLines={1}>{post.url}</Text></View> : null}
             <View style={s.postFooter}>
                 <TouchableOpacity style={[s.voteBtn, voteState === 'up' && s.voteBtnUp]} onPress={e => { e.stopPropagation(); onVote(post.id, true); }}>
@@ -889,33 +897,81 @@ function PostCard({ post, myRole, myUserID, voteState, onVote, onDeleteRequest, 
 // ─── Create Post Modal ────────────────────────────────────────────────────────
 
 function CreatePostModal({ visible, communityID, onClose, onCreated }: { visible: boolean; communityID: string; onClose: () => void; onCreated: () => void }) {
-    const [title, setTitle] = useState(''); const [content, setContent] = useState(''); const [url, setUrl] = useState('');
-    const [loading, setLoading] = useState(false); const [errors, setErrors] = useState<Record<string, string>>({});
-    const titleLeft = POST_TITLE_MAX - title.length; const contentLeft = POST_CONTENT_MAX - content.length;
+    const [title, setTitle] = useState('');
+    const [content, setContent] = useState('');
+    const [url, setUrl] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
     const reset = () => { setTitle(''); setContent(''); setUrl(''); setErrors({}); };
+
     const validate = () => {
         const e: Record<string, string> = {};
-        if (!title.trim()) e.title = 'El título es obligatorio'; else if (title.length > POST_TITLE_MAX) e.title = `Máximo ${POST_TITLE_MAX} caracteres`;
-        if (!content.trim()) e.content = 'El contenido es obligatorio'; else if (content.length > POST_CONTENT_MAX) e.content = `Máximo ${POST_CONTENT_MAX} caracteres`;
+        if (!title.trim()) e.title = 'El título es obligatorio';
+        else if (title.length > POST_TITLE_MAX) e.title = `Máximo ${POST_TITLE_MAX} caracteres`;
+        if (!content.trim()) e.content = 'El contenido es obligatorio';
+        else if (content.length > POST_CONTENT_MAX) e.content = `Máximo ${POST_CONTENT_MAX} caracteres`;
         setErrors(e); return Object.keys(e).length === 0;
     };
+
     const submit = async () => {
-        if (!validate()) return; setLoading(true);
+        if (!validate()) return;
+        setLoading(true);
         try {
             const res = await authFetch(`${API_URL}/posts`, { method: 'POST', body: JSON.stringify({ community_id: communityID, title: title.trim(), content: content.trim(), url: url.trim() }) });
             if (res.ok) { reset(); onCreated(); onClose(); } else setErrors({ _global: await res.text() || 'Error al publicar' });
         } catch { setErrors({ _global: 'Sin conexión' }); } finally { setLoading(false); }
     };
+
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={() => { reset(); onClose(); }}>
-            <View style={s.modalOverlay}><View style={s.modalSheet}>
-                <View style={s.modalHandle} /><View style={s.modalHeader}><Text style={s.modalTitle}>Nuevo Post</Text><TouchableOpacity onPress={() => { reset(); onClose(); }}><MaterialIcons name="close" size={22} color="#7a9ab0" /></TouchableOpacity></View>
-                <View style={s.fieldGroup}><View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Título <Text style={s.required}>*</Text></Text><Text style={[s.charCount, titleLeft < 8 && s.charWarn]}>{titleLeft}</Text></View><TextInput style={[s.modalInput, !!errors.title && s.inputError]} placeholder="¿Sobre qué trata? (máx. 32)" placeholderTextColor="#3d5a70" value={title} onChangeText={t => { setTitle(t); setErrors(e => ({ ...e, title: '' })); }} maxLength={POST_TITLE_MAX} />{errors.title ? <Text style={s.fieldError}>{errors.title}</Text> : null}</View>
-                <View style={s.fieldGroup}><View style={s.fieldLabelRow}><Text style={s.fieldLabel}>Contenido <Text style={s.required}>*</Text></Text><Text style={[s.charCount, contentLeft < 100 && s.charWarn]}>{contentLeft}</Text></View><TextInput style={[s.modalInput, s.modalTextarea, !!errors.content && s.inputError]} placeholder="¿Qué querés compartir?" placeholderTextColor="#3d5a70" value={content} onChangeText={t => { setContent(t); setErrors(e => ({ ...e, content: '' })); }} multiline numberOfLines={5} textAlignVertical="top" maxLength={POST_CONTENT_MAX} />{errors.content ? <Text style={s.fieldError}>{errors.content}</Text> : null}</View>
-                <View style={s.fieldGroup}><Text style={s.fieldLabel}>Link (opcional)</Text><TextInput style={s.modalInput} placeholder="https://..." placeholderTextColor="#3d5a70" value={url} onChangeText={setUrl} keyboardType="url" autoCapitalize="none" /></View>
-                {errors._global ? <View style={s.globalError}><MaterialIcons name="error-outline" size={14} color="#e05c5c" /><Text style={s.globalErrorText}>{errors._global}</Text></View> : null}
-                <TouchableOpacity style={[s.primaryBtn, loading && { opacity: 0.6 }]} onPress={submit} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Publicar</Text>}</TouchableOpacity>
-            </View></View>
+            <View style={s.modalOverlay}>
+                <View style={s.modalSheet}>
+                    <View style={s.modalHandle} />
+                    <View style={s.modalHeader}>
+                        <Text style={s.modalTitle}>Nuevo Post</Text>
+                        <TouchableOpacity onPress={() => { reset(); onClose(); }}><MaterialIcons name="close" size={22} color="#7a9ab0" /></TouchableOpacity>
+                    </View>
+
+                    <AppTextInput
+                        label="Título"
+                        required
+                        placeholder="¿Sobre qué trata? (máx. 32)"
+                        value={title}
+                        onChangeText={t => { setTitle(t); setErrors(e => ({ ...e, title: '' })); }}
+                        maxLength={POST_TITLE_MAX}
+                        error={errors.title}
+                    />
+
+                    <AppTextInput
+                        label="Contenido"
+                        required
+                        hint="Soporta Markdown (ej: **negrita**, *cursiva*)"
+                        placeholder="¿Qué querés compartir?"
+                        value={content}
+                        onChangeText={t => { setContent(t); setErrors(e => ({ ...e, content: '' })); }}
+                        multiline
+                        maxLength={POST_CONTENT_MAX}
+                        error={errors.content}
+                    />
+
+                    <AppTextInput
+                        label="URL (Opcional)"
+                        placeholder="https://..."
+                        value={url}
+                        onChangeText={setUrl}
+                        keyboardType="url"
+                        autoCapitalize="none"
+                        maxLength={400}
+                    />
+
+                    {errors._global ? <View style={s.globalError}><MaterialIcons name="error-outline" size={14} color="#e05c5c" /><Text style={s.globalErrorText}>{errors._global}</Text></View> : null}
+
+                    <TouchableOpacity style={[s.primaryBtn, loading && { opacity: 0.6 }]} onPress={submit} disabled={loading}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Publicar</Text>}
+                    </TouchableOpacity>
+                </View>
+            </View>
         </Modal>
     );
 }
@@ -948,6 +1004,10 @@ export default function CommunityDetailScreen() {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loadingPosts, setLoadingPosts] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const LIMIT = 10;
     const [myRole, setMyRole] = useState('');
     const [myUserID, setMyUserID] = useState('');
     const [isMember, setIsMember] = useState(false);
@@ -982,21 +1042,49 @@ export default function CommunityDetailScreen() {
         } catch { }
     }, [communityInfo.id]);
 
-    const loadPosts = useCallback(async () => {
-        setLoadingPosts(true);
+    const loadPosts = useCallback(async (pageNumber: number = 1, isSearch: boolean = false) => {
+        if (pageNumber === 1) setLoadingPosts(true);
+        else setLoadingMore(true);
+
         try {
-            const res = await authFetch(`${API_URL}/communities/${communityInfo.id}/posts`);
+            const offset = (pageNumber - 1) * LIMIT;
+            let url = `${API_URL}/communities/${communityInfo.id}/posts?limit=${LIMIT}&offset=${offset}`;
+            if (isSearch && postQuery.trim()) {
+                url = `${API_URL}/communities/${communityInfo.id}/posts/search?q=${encodeURIComponent(postQuery)}&limit=${LIMIT}&offset=${offset}`;
+            }
+
+            const res = await authFetch(url);
             if (res.ok) {
                 const data: Post[] = await res.json() ?? [];
-                setPosts(data);
-                const initial: Record<string, VoteState> = {};
-                data.forEach(p => { if (p.user_vote === true) initial[p.id] = 'up'; else if (p.user_vote === false) initial[p.id] = 'down'; });
-                setVotes(initial);
-            }
-        } catch { } finally { setLoadingPosts(false); }
-    }, [communityInfo.id]);
 
-    React.useEffect(() => { loadRole(); loadPosts(); }, []);
+                setHasMore(data.length === LIMIT);
+
+                setPosts(prev => pageNumber === 1 ? data : [...prev, ...data]);
+
+                setVotes(prev => {
+                    const newVotes = { ...(pageNumber === 1 ? {} : prev) };
+                    data.forEach(p => {
+                        if (p.user_vote === true) newVotes[p.id] = 'up';
+                        else if (p.user_vote === false) newVotes[p.id] = 'down';
+                    });
+                    return newVotes;
+                });
+
+                setPage(pageNumber);
+            }
+        } catch { } finally {
+            setLoadingPosts(false);
+            setLoadingMore(false);
+        }
+    }, [communityInfo.id, postQuery]);
+
+    const handleLoadMore = () => {
+        if (!loadingMore && !loadingPosts && hasMore) {
+            loadPosts(page + 1, !!postQuery.trim());
+        }
+    };
+
+    React.useEffect(() => { loadRole(); loadPosts(1); }, []);
     React.useEffect(() => {
         if (activeTab === 'about' && aboutMembers.length === 0) {
             setAboutMembersLoading(true);
@@ -1007,7 +1095,21 @@ export default function CommunityDetailScreen() {
         }
     }, [activeTab]);
 
-    const onRefresh = async () => { setRefreshing(true); await Promise.all([loadRole(), loadPosts()]); setRefreshing(false); };
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await Promise.all([loadRole(), loadPosts(1, !!postQuery.trim())]);
+        setRefreshing(false);
+    };
+
+    const searchPosts = async () => {
+        if (!postQuery.trim()) {
+            loadPosts(1, false);
+            return;
+        }
+        setSearching(true);
+        await loadPosts(1, true);
+        setSearching(false);
+    };
 
     const handleJoin = async () => {
         setJoining(true);
@@ -1090,15 +1192,6 @@ export default function CommunityDetailScreen() {
         }
     };
 
-    const searchPosts = async () => {
-        if (!postQuery.trim()) { loadPosts(); return; }
-        setSearching(true);
-        try {
-            const res = await authFetch(`${API_URL}/communities/${communityInfo.id}/posts/search?q=${encodeURIComponent(postQuery)}`);
-            if (res.ok) setPosts(await res.json() ?? []);
-        } catch { } finally { setSearching(false); }
-    };
-
     const canManage = myRole === 'owner' || myRole === 'moderator';
     const visibleTabs: { id: DetailTab; label: string; icon: any }[] = [
         { id: 'posts', label: 'Posts', icon: 'article' },
@@ -1164,22 +1257,69 @@ export default function CommunityDetailScreen() {
                         {postQuery.length > 0 && <TouchableOpacity onPress={() => { setPostQuery(''); loadPosts(); }}><MaterialIcons name="close" size={15} color="#3d5a70" /></TouchableOpacity>}
                     </View>
                     {loadingPosts || searching ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 40 }} /> : (
-                        <FlatList data={posts} keyExtractor={p => p.id}
-                                  renderItem={({ item }) => (
-                                      <PostCard
-                                          post={item}
-                                          myRole={myRole}
-                                          myUserID={myUserID}
-                                          voteState={votes[item.id] ?? null}
-                                          onVote={handleVote}
-                                          onDeleteRequest={handleDeletePost}
-                                          onEditRequest={post => { setEditingPost(post); setShowEditPost(true); }}
-                                          onPress={() => { setSelectedPost(item); setShowPostDetail(true); }}
-                                      />
-                                  )}
-                                  contentContainerStyle={s.postList}
-                                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00b4d8" />}
-                                  ListEmptyComponent={<View style={s.emptyBox}><MaterialIcons name="article" size={48} color="#1e3a5a" /><Text style={s.emptyTitle}>{!isMember ? 'Unite para ver los posts' : 'Todavía no hay posts'}</Text>{isMember && <Text style={s.emptyText}>¡Sé el primero en publicar!</Text>}</View>}
+                        <FlatList
+                            data={posts}
+                            keyExtractor={p => p.id}
+                            renderItem={({ item }) => (
+                                <PostCard
+                                    post={item}
+                                    myRole={myRole}
+                                    myUserID={myUserID}
+                                    voteState={votes[item.id] ?? null}
+                                    onVote={handleVote}
+                                    onDeleteRequest={handleDeletePost}
+                                    onEditRequest={post => { setEditingPost(post); setShowEditPost(true); }}
+                                    onPress={() => { setSelectedPost(item); setShowPostDetail(true); }}
+                                />
+                            )}
+                            contentContainerStyle={s.postList}
+                            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00b4d8" />}
+                            ListEmptyComponent={
+                                <View style={s.emptyBox}>
+                                    <MaterialIcons name="article" size={48} color="#1e3a5a" />
+                                    <Text style={s.emptyTitle}>{!isMember ? 'Unite para ver los posts' : 'Todavía no hay posts'}</Text>
+                                    {isMember && <Text style={s.emptyText}>¡Sé el primero en publicar!</Text>}
+                                </View>
+                            }
+                            ListFooterComponent={
+                                hasMore ? (
+                                    <TouchableOpacity
+                                        style={{
+                                            marginHorizontal: 16,
+                                            marginVertical: 20,
+                                            paddingVertical: 14,
+                                            borderRadius: 12,
+                                            borderWidth: 1.5,
+                                            borderColor: '#00b4d8',
+                                            backgroundColor: 'rgba(0,180,216,0.08)',
+                                            alignItems: 'center',
+                                            flexDirection: 'row',
+                                            justifyContent: 'center',
+                                            gap: 8,
+                                        }}
+                                        onPress={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? (
+                                            <ActivityIndicator color="#00b4d8" size="small" />
+                                        ) : (
+                                            <>
+                                                <MaterialIcons name="expand-more" size={20} color="#00b4d8" />
+                                                <Text style={{ color: '#00b4d8', fontWeight: '700', fontSize: 14 }}>
+                                                    Cargar más posts
+                                                </Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                ) : posts.length > 0 ? (
+                                    <View style={{ alignItems: 'center', paddingVertical: 20, gap: 4 }}>
+                                        <MaterialIcons name="check-circle-outline" size={20} color="#3d5a70" />
+                                        <Text style={{ color: '#3d5a70', fontSize: 13 }}>
+                                            No hay más posts
+                                        </Text>
+                                    </View>
+                                ) : null
+                            }
                         />
                     )}
                     {isMember && <TouchableOpacity style={s.fab} onPress={() => setShowCreatePost(true)}><MaterialIcons name="edit" size={22} color="#fff" /></TouchableOpacity>}
@@ -1188,7 +1328,9 @@ export default function CommunityDetailScreen() {
 
             {activeTab === 'about' && (
                 <ScrollView contentContainerStyle={s.aboutContent}>
-                    <View style={s.aboutCard}><View style={s.aboutCardHeader}><MaterialIcons name="info-outline" size={16} color="#00b4d8" /><Text style={s.aboutCardTitle}>Descripción</Text></View><Text style={s.aboutText}>{communityInfo.description || 'Sin descripción.'}</Text></View>
+                    <View style={s.aboutCard}><View style={s.aboutCardHeader}><MaterialIcons name="info-outline" size={16} color="#00b4d8" /><Text style={s.aboutCardTitle}>Descripción</Text></View><Markdown style={markdownStyles}>
+                        {communityInfo.description || 'Sin descripción.'}
+                    </Markdown></View>
                     <View style={s.aboutCard}><View style={s.aboutCardHeader}><MaterialIcons name="gavel" size={16} color="#00b4d8" /><Text style={s.aboutCardTitle}>Reglas</Text></View><Text style={s.aboutText}>{communityInfo.rules || 'No hay reglas definidas.'}</Text></View>
                     {communityInfo.topics?.length > 0 && <View style={s.aboutCard}><View style={s.aboutCardHeader}><MaterialIcons name="label-outline" size={16} color="#00b4d8" /><Text style={s.aboutCardTitle}>Temas</Text></View><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>{communityInfo.topics.map((t: string) => <TopicPill key={t} topic={t} />)}</View></View>}
                     <View style={s.aboutCard}>
@@ -1400,4 +1542,14 @@ const s = StyleSheet.create({
     modalTextarea: { height: 110, paddingTop: 12 },
     primaryBtn: { backgroundColor: '#00b4d8', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
     primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+});
+
+const markdownStyles = StyleSheet.create({
+    body: { color: '#7a9ab0', fontSize: 14, lineHeight: 22 },
+    heading1: { color: '#e8f4f8', marginTop: 10, marginBottom: 5 },
+    heading2: { color: '#e8f4f8', marginTop: 10, marginBottom: 5 },
+    strong: { color: '#e8f4f8', fontWeight: 'bold' },
+    link: { color: '#00b4d8', textDecorationLine: 'none' },
+    bullet_list: { color: '#7a9ab0' },
+    ordered_list: { color: '#7a9ab0' },
 });

@@ -88,6 +88,51 @@ func (r *PostgresPostRepository) FindByCommunityID(communityID, readerID uuid.UU
 	return posts, nil
 }
 
+func (r *PostgresPostRepository) FindByCommunityIDPaginated(communityID, readerID uuid.UUID, limit, offset int) ([]domain.PostResponse, error) {
+	query := `
+        SELECT p.id, p.community_id, p.parent_id, p.author_id, p.title, p.content, p.url,
+               p.upvotes, p.downvotes, p.comment_count, p.created_at, p.updated_at,
+               (u.first_name || ' ' || u.last_name) AS author_name,
+               pv.is_upvote AS user_vote
+        FROM posts p
+        INNER JOIN users u ON p.author_id = u.id
+        LEFT JOIN post_votes pv ON pv.post_id = p.id AND pv.user_id = $2
+        WHERE p.community_id = $1 AND p.parent_id IS NULL
+        ORDER BY p.created_at DESC
+        LIMIT $3 OFFSET $4
+    `
+
+	rows, err := r.db.Query(query, communityID, readerID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []domain.PostResponse
+	for rows.Next() {
+		var pr domain.PostResponse
+
+		err := rows.Scan(
+			&pr.ID, &pr.CommunityID, &pr.ParentID, &pr.AuthorID,
+			&pr.Title, &pr.Content, &pr.URL,
+			&pr.Upvotes, &pr.Downvotes, &pr.CommentCount,
+			&pr.CreatedAt, &pr.UpdatedAt,
+			&pr.AuthorName,
+			&pr.UserVote,
+		)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, pr)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
+
 func (r *PostgresPostRepository) CountByUserID(authorID uuid.UUID) (int, error) {
 	var count int
 	err := r.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE author_id = $1`, authorID).Scan(&count)
@@ -130,8 +175,7 @@ func (r *PostgresPostRepository) FindRepliesByPostID(parentID, readerID uuid.UUI
 	return replies, nil
 }
 
-// busca comentarios originales ya que se pregunta si parent_id es NULL. (No comentarios a posts)
-func (r *PostgresPostRepository) SearchPostsInCommunity(communityID uuid.UUID, searchQuery string) ([]domain.PostResponse, error) {
+func (r *PostgresPostRepository) SearchPostsInCommunity(communityID uuid.UUID, searchQuery string, limit, offset int) ([]domain.PostResponse, error) {
 	var posts []domain.PostResponse
 	searchTerm := "%" + searchQuery + "%"
 
@@ -143,9 +187,10 @@ func (r *PostgresPostRepository) SearchPostsInCommunity(communityID uuid.UUID, s
         WHERE p.community_id = $1 AND p.parent_id IS NULL 
         AND (p.title ILIKE $2 OR p.content ILIKE $2)
         ORDER BY p.created_at DESC
+        LIMIT $3 OFFSET $4
     `
 
-	rows, err := r.db.Query(query, communityID, searchTerm)
+	rows, err := r.db.Query(query, communityID, searchTerm, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +209,7 @@ func (r *PostgresPostRepository) SearchPostsInCommunity(communityID uuid.UUID, s
 	}
 	return posts, nil
 }
+
 func (r *PostgresPostRepository) Update(p domain.Post) error {
 	query := `
         UPDATE posts

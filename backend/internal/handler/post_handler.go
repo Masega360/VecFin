@@ -14,9 +14,9 @@ type PostUsecasePort interface {
 	Create(communityID, authorID uuid.UUID, parentID *uuid.UUID, title, content, url string) error
 	EditPost(communityID, authorID uuid.UUID, title, content, url string) error
 	VotePost(postID, userID uuid.UUID, isUpvote bool) error
-	GetCommunityPosts(communityID, readerID uuid.UUID) ([]domain.PostResponse, error)
+	GetCommunityPosts(communityID, readerID uuid.UUID, limit, offset int) ([]domain.PostResponse, error)
 	DeletePost(postID, userID uuid.UUID) error
-	SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.PostResponse, error)
+	SearchPostsInCommunity(communityID, readerID uuid.UUID, query string, limit, offset int) ([]domain.PostResponse, error)
 	GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error)
 	ShowPosts(viewerID, targetID uuid.UUID, limit, offset int) ([]domain.PostResponse, error)
 }
@@ -176,7 +176,6 @@ func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Endpoint para OBTENER LOS POSTS de una comunidad
 func (h *PostHandler) GetCommunityPosts(w http.ResponseWriter, r *http.Request) {
-	// 1. Saber quién es el cliente (ID del lector)
 	userStr, ok := r.Context().Value(middleware.UserIDKey).(string)
 	if !ok {
 		http.Error(w, "No autorizado", http.StatusUnauthorized)
@@ -184,7 +183,6 @@ func (h *PostHandler) GetCommunityPosts(w http.ResponseWriter, r *http.Request) 
 	}
 	readerID, _ := uuid.Parse(userStr)
 
-	// 2. Leer la orden de la URL (ID de la comunidad)
 	commIDStr := r.PathValue("id")
 	communityID, err := uuid.Parse(commIDStr)
 	if err != nil {
@@ -192,15 +190,31 @@ func (h *PostHandler) GetCommunityPosts(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 3. Pasar la orden al Chef (Usecase)
-	posts, err := h.uc.GetCommunityPosts(communityID, readerID)
+	limit := 10
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	posts, err := h.uc.GetCommunityPosts(communityID, readerID, limit, offset)
 	if err != nil {
-		// Si la comunidad es privada y no es miembro, el Usecase tirará error y caeremos aquí
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
-	// 4. Entregar el plato: Traducir los posts de Go a JSON y enviarlos
+	if posts == nil {
+		posts = []domain.PostResponse{}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
 }
@@ -209,17 +223,35 @@ func (h *PostHandler) SearchPosts(w http.ResponseWriter, r *http.Request) {
 	readerID, _ := h.getUserIDFromContext(r)
 	commID, _ := uuid.Parse(r.PathValue("id"))
 
-	// Leemos el query parameter (ej: /posts/search?q=bitcoin)
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		http.Error(w, "Falta el término de búsqueda (q)", http.StatusBadRequest)
 		return
 	}
 
-	posts, err := h.uc.SearchPostsInCommunity(commID, readerID, query)
+	limit := 10
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	posts, err := h.uc.SearchPostsInCommunity(commID, readerID, query, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
+	}
+
+	if posts == nil {
+		posts = []domain.PostResponse{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

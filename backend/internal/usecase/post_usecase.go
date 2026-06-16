@@ -194,7 +194,7 @@ func (p *PostUsecase) DeletePost(postID, userID uuid.UUID) error {
 	return p.postRepo.Delete(postID)
 }
 
-func (p *PostUsecase) GetCommunityPosts(communityID, readerID uuid.UUID) ([]domain.PostResponse, error) {
+func (p *PostUsecase) GetCommunityPosts(communityID, readerID uuid.UUID, limit, offset int) ([]domain.PostResponse, error) {
 	comm, err := p.commRepo.FindByID(communityID)
 	if err != nil {
 		return nil, err
@@ -208,10 +208,10 @@ func (p *PostUsecase) GetCommunityPosts(communityID, readerID uuid.UUID) ([]doma
 		}
 	}
 
-	return p.postRepo.FindByCommunityID(communityID, readerID)
+	return p.postRepo.FindByCommunityIDPaginated(communityID, readerID, limit, offset)
 }
 
-func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, query string) ([]domain.PostResponse, error) {
+func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, query string, limit, offset int) ([]domain.PostResponse, error) {
 	comm, err := p.commRepo.FindByID(communityID)
 	if err != nil {
 		return nil, err
@@ -223,7 +223,7 @@ func (p *PostUsecase) SearchPostsInCommunity(communityID, readerID uuid.UUID, qu
 		}
 	}
 
-	return p.postRepo.SearchPostsInCommunity(communityID, query)
+	return p.postRepo.SearchPostsInCommunity(communityID, query, limit, offset)
 }
 
 func (p *PostUsecase) GetReplies(postID, readerID uuid.UUID) ([]domain.PostResponse, error) {

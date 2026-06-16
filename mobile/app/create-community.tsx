@@ -7,6 +7,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
+import AppTextInput from '@/components/AppTextInput';
 
 // ─── Limits (espejados del domain Go) ────────────────────────────────────────
 const NAME_MAX = 64;
@@ -21,75 +22,7 @@ function charCounter(value: string, max: number) {
     return { left, isNear };
 }
 
-// ─── Field Component ──────────────────────────────────────────────────────────
 
-function Field({
-                   label,
-                   required,
-                   hint,
-                   value,
-                   onChangeText,
-                   placeholder,
-                   multiline,
-                   max,
-                   keyboardType,
-                   autoCapitalize,
-                   error,
-               }: {
-    label: string;
-    required?: boolean;
-    hint?: string;
-    value: string;
-    onChangeText: (t: string) => void;
-    placeholder: string;
-    multiline?: boolean;
-    max?: number;
-    keyboardType?: any;
-    autoCapitalize?: any;
-    error?: string;
-}) {
-    const counter = max ? charCounter(value, max) : null;
-
-    return (
-        <View style={f.group}>
-            <View style={f.labelRow}>
-                <Text style={f.label}>
-                    {label}
-                    {required && <Text style={f.required}> *</Text>}
-                </Text>
-                {counter && (
-                    <Text style={[f.counter, counter.isNear && f.counterNear]}>
-                        {counter.left}
-                    </Text>
-                )}
-            </View>
-            {hint && <Text style={f.hint}>{hint}</Text>}
-            <TextInput
-                style={[
-                    f.input,
-                    multiline && f.textarea,
-                    !!error && f.inputError,
-                ]}
-                placeholder={placeholder}
-                placeholderTextColor="#3d5a70"
-                value={value}
-                onChangeText={onChangeText}
-                multiline={multiline}
-                numberOfLines={multiline ? 4 : 1}
-                textAlignVertical={multiline ? 'top' : 'center'}
-                maxLength={max}
-                keyboardType={keyboardType}
-                autoCapitalize={autoCapitalize ?? 'sentences'}
-            />
-            {error ? (
-                <View style={f.errorRow}>
-                    <MaterialIcons name="error-outline" size={13} color="#e05c5c" />
-                    <Text style={f.errorText}>{error}</Text>
-                </View>
-            ) : null}
-        </View>
-    );
-}
 
 // ─── Toggle Switch ────────────────────────────────────────────────────────────
 
@@ -245,7 +178,7 @@ export default function CreateCommunityScreen() {
             });
 
             if (res.ok) {
-                router.back();
+                router.replace('/home?tab=community');
             } else {
                 const errorText = await res.text();
                 Alert.alert('Error', errorText || 'No se pudo crear la comunidad.');
@@ -296,17 +229,17 @@ export default function CreateCommunityScreen() {
                         Creá un espacio para debatir y compartir sobre tus temas financieros favoritos.
                     </Text>
 
-                    <Field
+                    <AppTextInput
                         label="Nombre"
                         required
                         placeholder="Ej: Inversores Argentina"
                         value={name}
                         onChangeText={t => { setName(t); clearError('name'); }}
-                        max={NAME_MAX}
+                        maxLength={NAME_MAX}
                         error={errors.name}
                     />
 
-                    <Field
+                    <AppTextInput
                         label="Descripción"
                         required
                         hint="Contá de qué trata tu comunidad"
@@ -314,11 +247,11 @@ export default function CreateCommunityScreen() {
                         value={description}
                         onChangeText={t => { setDescription(t); clearError('description'); }}
                         multiline
-                        max={DESC_MAX}
+                        maxLength={DESC_MAX}
                         error={errors.description}
                     />
 
-                    <Field
+                    <AppTextInput
                         label="Reglas"
                         required
                         hint="Definí las normas de convivencia"
@@ -326,13 +259,13 @@ export default function CreateCommunityScreen() {
                         value={rules}
                         onChangeText={t => { setRules(t); clearError('rules'); }}
                         multiline
-                        max={RULES_MAX}
+                        maxLength={RULES_MAX}
                         error={errors.rules}
                     />
 
                     <TopicsInput topics={topics} onChange={setTopics} />
 
-                    <Field
+                    <AppTextInput
                         label="URL del logo"
                         hint="Opcional · Link directo a una imagen"
                         placeholder="https://ejemplo.com/logo.png"
@@ -340,6 +273,7 @@ export default function CreateCommunityScreen() {
                         onChangeText={setLogoUrl}
                         keyboardType="url"
                         autoCapitalize="none"
+                        maxLength={400}
                     />
 
                     <View style={s.section}>

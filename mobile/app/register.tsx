@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL } from '@/utils/api';
+import AppTextInput from '@/components/AppTextInput';
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
@@ -92,32 +93,45 @@ export default function RegisterScreen() {
         {error   ? <View style={styles.errorBox}><MaterialIcons name="error-outline" size={16} color="#ff4444" /><Text style={styles.errorText}>{error}</Text></View>   : null}
         {success ? <View style={styles.successBox}><MaterialIcons name="check-circle" size={16} color="#00D26A" /><Text style={styles.successText}>{success}</Text></View> : null}
 
-        <View style={styles.inputWrapper}>
-          <MaterialIcons name="person" size={20} color="#00ADD8" style={styles.icon} />
-          <TextInput style={styles.input} placeholder="Nombre" placeholderTextColor="#aab8c8"
-            value={firstName} onChangeText={setFirstName} />
-        </View>
+        <AppTextInput
+            label="Nombre"
+            placeholder="Tu nombre"
+            value={firstName}
+            onChangeText={setFirstName}
+            maxLength={100}
+        />
 
-        <View style={styles.inputWrapper}>
-          <MaterialIcons name="person-outline" size={20} color="#00ADD8" style={styles.icon} />
-          <TextInput style={styles.input} placeholder="Apellido" placeholderTextColor="#aab8c8"
-            value={lastName} onChangeText={setLastName} />
-        </View>
+        <AppTextInput
+            label="Apellido"
+            placeholder="Tu apellido"
+            value={lastName}
+            onChangeText={setLastName}
+            maxLength={100}
+        />
 
-        <View style={styles.inputWrapper}>
-          <MaterialIcons name="email" size={20} color="#00ADD8" style={styles.icon} />
-          <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#aab8c8"
-            value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        </View>
+        <AppTextInput
+            label="Email"
+            placeholder="ejemplo@correo.com"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            maxLength={255}
+        />
 
-        <View style={styles.inputWrapper}>
-          <MaterialIcons name="lock" size={20} color="#00ADD8" style={styles.icon} />
-          <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#aab8c8"
-            value={password} onChangeText={setPassword} secureTextEntry={!showPass} />
+
+
+          <AppTextInput
+              label="Contraseña"
+              placeholder="Tu contraseña"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPass}
+              maxLength={128}
+          />
           <TouchableOpacity onPress={() => setShowPass(v => !v)}>
             <MaterialIcons name={showPass ? 'visibility-off' : 'visibility'} size={20} color="#aab8c8" />
           </TouchableOpacity>
-        </View>
 
         {password.length > 0 && <PasswordStrength password={password} />}
 

@@ -9,6 +9,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 import AssetChart, { OHLCPoint, ChartRange } from '@/components/AssetChart';
 import { API_URL, getValidToken } from '@/utils/api';
+import AppTextInput from "@/components/AppTextInput";
+import Markdown from "react-native-markdown-display";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -554,14 +556,15 @@ export default function AssetDetailScreen() {
                         </TouchableOpacity>
                       </View>
                     )}
-                    <TextInput
-                      style={styles.commentTextInput}
-                      placeholder={replyTo ? 'Escribí tu respuesta...' : 'Escribí un comentario...'}
-                      placeholderTextColor="#4a6a80"
-                      value={commentText}
-                      onChangeText={setCommentText}
-                      multiline
+                    <AppTextInput
+                        label="Comment"
+                        placeholder={replyTo ? 'Escribí tu respuesta...' : 'Escribí un comentario...'}
+                        placeholderTextColor="#4a6a80"
+                        value={commentText}
+                        onChangeText={setCommentText}
+                        maxLength={500}
                     />
+                    
                   </View>
                   <TouchableOpacity onPress={postComment} disabled={posting}>
                     <MaterialIcons name="send" size={20} color={posting ? '#2a4a60' : '#00ADD8'} />
@@ -791,4 +794,14 @@ const styles = StyleSheet.create({
   commentActions: { flexDirection: 'row', gap: 16, marginTop: 8 },
   commentAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   commentActionText: { color: '#4a6a80', fontSize: 12 },
+});
+
+const markdownStyles = StyleSheet.create({
+  body: { color: '#7a9ab0', fontSize: 14, lineHeight: 22 },
+  heading1: { color: '#e8f4f8', marginTop: 10, marginBottom: 5 },
+  heading2: { color: '#e8f4f8', marginTop: 10, marginBottom: 5 },
+  strong: { color: '#e8f4f8', fontWeight: 'bold' },
+  link: { color: '#00b4d8', textDecorationLine: 'none' },
+  bullet_list: { color: '#7a9ab0' },
+  ordered_list: { color: '#7a9ab0' },
 });

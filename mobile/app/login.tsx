@@ -9,6 +9,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
+import AppTextInput from '@/components/AppTextInput';
 
 
 WebBrowser.maybeCompleteAuthSession();
@@ -135,33 +136,27 @@ export default function LoginScreen() {
               </View>
           ) : null}
 
-          <View style={styles.inputWrapper}>
-            <MaterialIcons name="email" size={20} color="#00ADD8" style={styles.inputIcon} />
-            <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#aab8c8"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-            />
-          </View>
+          <AppTextInput
+              label="Email"
+              placeholder="ejemplo@correo.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              maxLength={255}
+          />
 
-          <View style={styles.inputWrapper}>
-            <MaterialIcons name="lock" size={20} color="#00ADD8" style={styles.inputIcon} />
-            <TextInput
-                style={styles.input}
-                placeholder="Contraseña"
-                placeholderTextColor="#aab8c8"
+            <AppTextInput
+                label="Contraseña"
+                placeholder="Tu contraseña"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                maxLength={128}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
               <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={20} color="#aab8c8" />
             </TouchableOpacity>
-          </View>
 
           <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin}>
             <Text style={styles.btnText}>Entrar</Text>

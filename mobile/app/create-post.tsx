@@ -7,6 +7,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
+import AppTextInput from '@/components/AppTextInput';
 
 export default function CreatePostScreen() {
     const router = useRouter();
@@ -123,46 +124,33 @@ export default function CreatePostScreen() {
                         </View>
                     ) : null}
 
-                    {/* Título */}
-                    <TextInput
-                        style={styles.titleInput}
+                    <AppTextInput
+                        label="Título del post"
                         placeholder="Un título interesante..."
-                        placeholderTextColor="#4a6a80"
                         value={title}
                         onChangeText={setTitle}
-                        maxLength={120}
+                        maxLength={120} // Vos ya tenías este límite!
                         multiline
                     />
 
-                    <View style={styles.divider} />
-
-                    {/* Contenido */}
-                    <TextInput
-                        style={styles.contentInput}
+                    <AppTextInput
+                        label="Contenido"
                         placeholder="Escribe lo que estás pensando..."
-                        placeholderTextColor="#4a6a80"
                         value={content}
                         onChangeText={setContent}
+                        maxLength={2000}
                         multiline
-                        textAlignVertical="top"
                     />
 
-                    <View style={styles.divider} />
-
-                    {/* URL Opcional */}
-                    <View style={styles.urlContainer}>
-                        <MaterialIcons name="link" size={20} color="#4a6a80" />
-                        <TextInput
-                            style={styles.urlInput}
-                            placeholder="Añadir un enlace (opcional)"
-                            placeholderTextColor="#4a6a80"
-                            value={linkUrl}
-                            onChangeText={setLinkUrl}
-                            keyboardType="url"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                    </View>
+                    <AppTextInput
+                        label="URL (Opcional)"
+                        placeholder="https://..."
+                        value={linkUrl}
+                        onChangeText={setLinkUrl}
+                        keyboardType="url"
+                        autoCapitalize="none"
+                        maxLength={500}
+                    />
 
                 </ScrollView>
             </KeyboardAvoidingView>

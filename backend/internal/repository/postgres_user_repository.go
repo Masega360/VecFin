@@ -30,7 +30,7 @@ func (r *PostgresUserRepository) FindByID(id uuid.UUID) (domain.User, error) {
 	var user domain.User
 	query := `
 		SELECT id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), risk_type, registration_date, is_private, show_wallets, show_communities, show_posts
-		FROM users WHERE id = $1
+		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
 	err := r.db.QueryRow(query, id).Scan(
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
@@ -50,7 +50,7 @@ func (r *PostgresUserRepository) FindByEmail(email string) (domain.User, error) 
 	var user domain.User
 	query := `
 		SELECT id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), risk_type, registration_date, is_private, show_wallets, show_communities, show_posts
-		FROM users WHERE email = $1
+		FROM users WHERE email = $1 AND deleted_at IS NULL
 	`
 	err := r.db.QueryRow(query, email).Scan(
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
@@ -70,7 +70,7 @@ func (r *PostgresUserRepository) FindByGoogleID(googleID string) (domain.User, e
 	var user domain.User
 	query := `
 		SELECT id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), risk_type, registration_date, is_private, show_wallets, show_communities, show_posts
-		FROM users WHERE google_id = $1
+		FROM users WHERE google_id = $1 AND deleted_at IS NULL
 	`
 	err := r.db.QueryRow(query, googleID).Scan(
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
@@ -97,7 +97,16 @@ func (r *PostgresUserRepository) Update(user domain.User) error {
 }
 
 func (r *PostgresUserRepository) Delete(id uuid.UUID) error {
-	query := `DELETE FROM users WHERE id = $1`
+	query := `
+        UPDATE users 
+        SET deleted_at = NOW(),
+            first_name = 'Usuario',
+            last_name = 'Eliminado',
+            email = id::text || '@deleted.vecfin',
+            password_hash = 'deleted',
+            google_id = NULL
+        WHERE id = $1 AND deleted_at IS NULL
+    `
 	_, err := r.db.Exec(query, id)
 	return err
 }
@@ -122,7 +131,7 @@ func (r *PostgresUserRepository) FindManyByIDs(ids []uuid.UUID) ([]domain.User, 
 			show_communities,
 			show_posts
 		FROM users
-		WHERE id = ANY($1)
+		WHERE id = ANY($1) AND deleted_at IS NULL
 	`
 
 	stringIDs := make([]string, len(ids))
@@ -189,9 +198,8 @@ func (r *PostgresUserRepository) Search(query string) ([]domain.User, error) {
             id, first_name, last_name, email, password_hash, COALESCE(google_id, ''), 
             risk_type, registration_date, is_private, show_wallets, show_communities, show_posts
         FROM users 
-        WHERE first_name ILIKE $1 
-           OR last_name ILIKE $1 
-           OR email ILIKE $1
+        WHERE (first_name ILIKE $1 OR last_name ILIKE $1 OR email ILIKE $1)
+          AND deleted_at IS NULL
         LIMIT 50
     `
 
