@@ -112,21 +112,21 @@ BEGIN
     SELECT id INTO c3 FROM communities WHERE name='Hodlers Club';
     SELECT id INTO c4 FROM communities WHERE name='Tech Stocks Latam';
 
-    INSERT INTO posts (community_id, author_id, title, content) VALUES
-      (c1, uids[1], 'Bitcoin a 100k este mes?', 'Alguien mas piensa que BTC rompe los 100k antes de fin de mes? Los indicadores estan todos bullish'),
-      (c1, uids[2], 'Mejor exchange para argentinos', 'Que exchange usan para comprar crypto con pesos? Binance P2P? Lemon? Fiwind?'),
-      (c1, uids[3], 'Tutorial: DCA automatico', 'Les comparto mi estrategia de DCA semanal en BTC y ETH. Vengo haciendo esto hace 2 anios'),
-      (c1, uids[4], 'Ojo con las regulaciones', 'Se viene regulacion cripto en Argentina. Estan preparados?'),
-      (c1, uids[5], 'Solana vs Ethereum en 2026', 'SOL esta volando, va a superar a ETH en TVL?'),
-      (c2, uids[1], 'Yield farming en Aave v3', 'Estoy sacando 8% APY en USDC en Aave. Alguien tiene mejores estrategias?'),
-      (c2, uids[2], 'Riesgo de impermanent loss', 'Cuidado con los pools de LP en Uniswap, el IL me comio las ganancias de 3 meses'),
-      (c2, uids[3], 'Mejores vaults 2026', 'Yearn, Beefy o Convex? Cual les esta dando mas rendimiento este anio?'),
-      (c3, uids[1], 'Mi portfolio hold desde 2020', 'BTC, ETH y SOL. No vendi nada en todo el bear market. Hoy estoy 400% arriba'),
-      (c3, uids[3], 'Nunca vender es la clave', 'El que vendio en el crash de 2022 se arrepiente hoy. Diamond hands forever'),
-      (c3, uids[5], 'Cuando tomar profit?', 'Se que somos holders pero... en algun punto hay que realizar ganancias no?'),
-      (c4, uids[1], 'NVDA despues del split', 'Nvidia sigue siendo buy despues del stock split? Analicemos'),
-      (c4, uids[2], 'Apple vs Microsoft 2026', 'Cual tiene mejor upside para los proximos 5 anios?'),
-      (c4, uids[4], 'AMD la proxima NVDA?', 'AMD esta infravalorada comparada con NVDA. Es momento de entrar?');
+    INSERT INTO posts (community_id, author_id, title, content, url) VALUES
+      (c1, uids[1], 'Bitcoin a 100k este mes?', 'Alguien mas piensa que BTC rompe los 100k antes de fin de mes? Los indicadores estan todos bullish', ''),
+      (c1, uids[2], 'Mejor exchange para argentinos', 'Que exchange usan para comprar crypto con pesos? Binance P2P? Lemon? Fiwind?', ''),
+      (c1, uids[3], 'Tutorial: DCA automatico', 'Les comparto mi estrategia de DCA semanal en BTC y ETH. Vengo haciendo esto hace 2 anios', ''),
+      (c1, uids[4], 'Ojo con las regulaciones', 'Se viene regulacion cripto en Argentina. Estan preparados?', ''),
+      (c1, uids[5], 'Solana vs Ethereum en 2026', 'SOL esta volando, va a superar a ETH en TVL?', ''),
+      (c2, uids[1], 'Yield farming en Aave v3', 'Estoy sacando 8% APY en USDC en Aave. Alguien tiene mejores estrategias?', ''),
+      (c2, uids[2], 'Riesgo de impermanent loss', 'Cuidado con los pools de LP en Uniswap, el IL me comio las ganancias de 3 meses', ''),
+      (c2, uids[3], 'Mejores vaults 2026', 'Yearn, Beefy o Convex? Cual les esta dando mas rendimiento este anio?', ''),
+      (c3, uids[1], 'Mi portfolio hold desde 2020', 'BTC, ETH y SOL. No vendi nada en todo el bear market. Hoy estoy 400% arriba', ''),
+      (c3, uids[3], 'Nunca vender es la clave', 'El que vendio en el crash de 2022 se arrepiente hoy. Diamond hands forever', ''),
+      (c3, uids[5], 'Cuando tomar profit?', 'Se que somos holders pero... en algun punto hay que realizar ganancias no?', ''),
+      (c4, uids[1], 'NVDA despues del split', 'Nvidia sigue siendo buy despues del stock split? Analicemos', ''),
+      (c4, uids[2], 'Apple vs Microsoft 2026', 'Cual tiene mejor upside para los proximos 5 anios?', ''),
+      (c4, uids[4], 'AMD la proxima NVDA?', 'AMD esta infravalorada comparada con NVDA. Es momento de entrar?', '');
   END;
 
   -- Actualizar contadores
