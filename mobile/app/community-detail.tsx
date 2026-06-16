@@ -960,6 +960,8 @@ export default function CommunityDetailScreen() {
     const [searching, setSearching] = useState(false);
     const [selectedPost, setSelectedPost] = useState<Post | null>(null);
     const [showPostDetail, setShowPostDetail] = useState(false);
+    const [aboutMembers, setAboutMembers] = useState<Member[]>([]);
+    const [aboutMembersLoading, setAboutMembersLoading] = useState(false);
     const [showMembers, setShowMembers] = useState(false);
     const [showRequests, setShowRequests] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
@@ -995,6 +997,16 @@ export default function CommunityDetailScreen() {
     }, [communityInfo.id]);
 
     React.useEffect(() => { loadRole(); loadPosts(); }, []);
+    React.useEffect(() => {
+        if (activeTab === 'about' && aboutMembers.length === 0) {
+            setAboutMembersLoading(true);
+            authFetch(`${API_URL}/communities/${communityInfo.id}/members`)
+                .then(res => res.ok ? res.json() : [])
+                .then(data => setAboutMembers(data ?? []))
+                .finally(() => setAboutMembersLoading(false));
+        }
+    }, [activeTab]);
+
     const onRefresh = async () => { setRefreshing(true); await Promise.all([loadRole(), loadPosts()]); setRefreshing(false); };
 
     const handleJoin = async () => {
@@ -1188,6 +1200,22 @@ export default function CommunityDetailScreen() {
                             <View style={s.statDivider} />
                             <View style={s.statItem}><MaterialIcons name={communityInfo.is_private ? 'lock' : 'lock-open'} size={20} color={communityInfo.is_private ? '#e05c5c' : '#34c78a'} /><Text style={s.statLabel}>{communityInfo.is_private ? 'Privada' : 'Pública'}</Text></View>
                         </View>
+                    </View>
+                    <View style={s.aboutCard}>
+                        <View style={s.aboutCardHeader}><MaterialIcons name="people" size={16} color="#00b4d8" /><Text style={s.aboutCardTitle}>Miembros ({aboutMembers.length})</Text></View>
+                        {aboutMembersLoading ? <ActivityIndicator color="#00b4d8" style={{ marginTop: 10 }} /> : (
+                            aboutMembers.map(m => (
+                                <TouchableOpacity key={m.user_id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#132238' }}
+                                    onPress={() => router.push({ pathname: '/user-profile', params: { userId: m.user_id } })}>
+                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#1a3050', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: '#00b4d8', fontWeight: '700' }}>{m.first_name?.[0]}</Text>
+                                    </View>
+                                    <Text style={{ color: '#e0e0e0', flex: 1 }}>{m.first_name} {m.last_name}</Text>
+                                    <Text style={{ color: m.role === 'owner' ? '#FFD700' : m.role === 'moderator' ? '#7b68ee' : '#4a6a80', fontSize: 11, fontWeight: '700' }}>{m.role.toUpperCase()}</Text>
+                                    <MaterialIcons name="chevron-right" size={18} color="#3d5a70" />
+                                </TouchableOpacity>
+                            ))
+                        )}
                     </View>
                 </ScrollView>
             )}
