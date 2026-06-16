@@ -116,7 +116,7 @@ const TABS: TabConfig[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function MainScreen() {
-  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  const { tab: tabParam, openProfile } = useLocalSearchParams<{ tab?: string; openProfile?: string }>();
   const firstEnabled = TABS.find(t => t.component !== null)?.id ?? TABS[0].id;
 
   // Arrancamos en la tab que venga por query param (?tab=wallets, etc).
@@ -187,7 +187,7 @@ export default function MainScreen() {
       {/* Tab content */}
       <View style={styles.content}>
         {TabContent ? (
-          <TabContent />
+          <TabContent {...(activeTab === 'dashboard' && openProfile ? { openProfileId: openProfile } : {})} />
         ) : (
           <View style={styles.comingSoon}>
             <MaterialIcons name={current?.icon ?? 'hourglass-empty'} size={56} color="#1e3a5a" />

@@ -53,7 +53,7 @@ type FollowListType = 'followers' | 'following' | null;
 
 const LIMIT = 10;
 
-export default function DashboardTab() {
+export default function DashboardTab({ openProfileId }: { openProfileId?: string }) {
   const [view, setView] = useState<TabView>('mine');
 
   // Mi estado
@@ -72,6 +72,11 @@ export default function DashboardTab() {
   const [guestDashboard, setGuestDashboard] = useState<DashboardData | null>(null);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Auto-abrir perfil si viene por prop
+  useEffect(() => {
+    if (openProfileId) handleOpenProfile(openProfileId);
+  }, [openProfileId]);
 
   // Estados de Seguidores/Seguidos
   const [followListVisible, setFollowListVisible] = useState(false);
