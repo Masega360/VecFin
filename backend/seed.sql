@@ -84,14 +84,14 @@ BEGIN
   DECLARE cid UUID;
   BEGIN
     FOR i IN 1..8 LOOP
-      INSERT INTO communities (id, creator_id, name, description, rules, topics, is_private)
+      INSERT INTO communities (id, creator_id, name, description, rules, topics, is_private, logo_url)
       VALUES (
         gen_random_uuid(), uids[i],
         (ARRAY['Crypto Argentina','DeFi Traders','Hodlers Club','Tech Stocks Latam','Trading para Novatos','Inversiones a Largo Plazo','Altcoins & Gems','Analisis Tecnico'])[i],
         (ARRAY['Comunidad para inversores cripto argentinos','Estrategias de DeFi y yield farming','Buy and hold, sin vender nunca','Acciones tech para inversores latinos','Aprende a tradear desde cero','Estrategias conservadoras de largo plazo','Descubri las proximas altcoins x100','Analisis de charts y patrones'])[i],
         'Respetar a los demas. No spam. No financial advice.',
         (ARRAY['{"crypto","argentina"}','{"defi","yield"}','{"bitcoin","hodl"}','{"stocks","tech"}','{"trading","education"}','{"investing","longterm"}','{"altcoins","research"}','{"analysis","charts"}'])[i]::text[],
-        i > 6
+        i > 6, ''
       ) RETURNING id INTO cid;
 
       INSERT INTO community_members (community_id, user_id, role) VALUES (cid, uids[i], 'owner') ON CONFLICT DO NOTHING;
