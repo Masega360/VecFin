@@ -17,7 +17,7 @@ type SMTPConfig struct {
 }
 
 type NotificationProvider interface {
-	Send(userID uuid.UUID, title, message string) error
+	Send(userID uuid.UUID, title, message, link string) error
 }
 
 type EmailService struct {
