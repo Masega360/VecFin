@@ -47,6 +47,11 @@ type chatTokenRepo interface {
 	GetMonthly(ctx context.Context, userID uuid.UUID) ([]domain.MonthlyUsage, error)
 }
 
+type chatBalanceService interface {
+	CheckCredit(ctx context.Context, userID uuid.UUID) (domain.UserBalance, error)
+	DeductUsage(ctx context.Context, userID uuid.UUID, costUSD float64) error
+}
+
 type ChatUsecase struct {
 	repo        chatRepository
 	ai          domain.AIProvider
@@ -56,10 +61,11 @@ type ChatUsecase struct {
 	market      chatMarketService
 	news        chatNewsProvider
 	tokens      chatTokenRepo
+	balance     chatBalanceService
 }
 
-func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService, news chatNewsProvider, tokens chatTokenRepo) *ChatUsecase {
-	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market, news: news, tokens: tokens}
+func NewChatUsecase(repo chatRepository, ai domain.AIProvider, users chatUserRepository, wallets chatWalletRepository, assetWallet chatAssetWalletRepository, market chatMarketService, news chatNewsProvider, tokens chatTokenRepo, balance chatBalanceService) *ChatUsecase {
+	return &ChatUsecase{repo: repo, ai: ai, users: users, wallets: wallets, assetWallet: assetWallet, market: market, news: news, tokens: tokens, balance: balance}
 }
 
 func (uc *ChatUsecase) CreateSession(ctx context.Context, userID uuid.UUID, title string) (domain.ChatSession, error) {
@@ -120,6 +126,16 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 		return domain.ChatMessage{}, domain.ErrForbidden
 	}
 
+	// ─── Verificar crédito y largo de mensaje ────────────────────────────
+	balance, err := uc.balance.CheckCredit(ctx, userID)
+	if err != nil {
+		return domain.ChatMessage{}, err
+	}
+	if len(content) > balance.MaxMessageLength() {
+		return domain.ChatMessage{}, ErrMessageTooLong
+	}
+	// ─────────────────────────────────────────────────────────────────────
+
 	history, err := uc.repo.ListMessages(ctx, sessionID)
 	if err != nil {
 		return domain.ChatMessage{}, err
@@ -146,10 +162,11 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 		return domain.ChatMessage{}, err
 	}
 
-	// Record token usage
+	// Record token usage + deduct balance
 	if reply.InputTokens > 0 || reply.OutputTokens > 0 {
 		cost := domain.CalculateCost(reply.Provider, reply.InputTokens, reply.OutputTokens)
 		_ = uc.tokens.Record(ctx, userID, reply.Provider, reply.InputTokens, reply.OutputTokens, cost)
+		_ = uc.balance.DeductUsage(ctx, userID, cost)
 	}
 
 	msg, err := uc.repo.AddMessage(ctx, sessionID, "model", reply.Content)

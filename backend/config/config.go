@@ -23,6 +23,8 @@ type Config struct {
 	GeminiAPIKey   string
 	AWSRegion      string
 	AssetSource    string // "own" = assets propios de VecFin, "external" = busca de wallets externas
+	MPAccessToken  string // MercadoPago access token (TEST- para sandbox)
+	BackendURL     string // URL pública del backend para webhooks
 }
 
 func Load() *Config {
@@ -47,6 +49,8 @@ func Load() *Config {
 		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
 		AWSRegion:      getEnvOrDefault("AWS_REGION", "us-east-1"),
 		AssetSource:    getEnvOrDefault("ASSET_SOURCE", "external"), // "own" o "external"
+		MPAccessToken:  os.Getenv("MP_ACCESS_TOKEN"),
+		BackendURL:     getEnvOrDefault("BACKEND_URL", "http://localhost:8080"),
 	}
 }
 

@@ -24,7 +24,9 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/platform/aiprovider"
 	"github.com/Masega360/vecfin/backend/internal/platform/bedrock"
 	"github.com/Masega360/vecfin/backend/internal/platform/binance"
+	"github.com/Masega360/vecfin/backend/internal/platform/iol"
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
+	"github.com/Masega360/vecfin/backend/internal/platform/mercadopago"
 	"github.com/Masega360/vecfin/backend/internal/platform/news"
 	"github.com/Masega360/vecfin/backend/internal/platform/pdf"
 	"github.com/Masega360/vecfin/backend/internal/platform/cache"
@@ -114,8 +116,9 @@ func main() {
 
 	yahooClient := cache.NewMarketCache(yahoo.NewClient(), 2*time.Minute)
 	binanceMarket := binance.NewClient()
+	iolMarket := iol.NewClient()
 	assetRepo := repository.NewPostgresAssetRepository(db)
-	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket)
+	marketUC := usecase.NewMarketUsecase(assetRepo, yahooClient, binanceMarket, iolMarket)
 	marketHandler := handler.NewMarketHandler(marketUC)
 	marketHandler.RegisterRoutes(cfg.JWTSecret)
 
@@ -130,6 +133,7 @@ func main() {
 	transferRepo := repository.NewPostgresTransferRepository(db)
 	exchanges := map[string]domain.ExchangeService{
 		"binance": binance.NewClient(),
+		"iol":     iol.NewClient(),
 	}
 	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC, walletMemberRepo, transferRepo)
 	walletHandler := handler.NewWalletHandler(walletUC)
@@ -147,6 +151,11 @@ func main() {
 	commUC := usecase.NewCommunityUsecase(commRepo, userRepo, followUC, dispatcher)
 	commHandler := handler.NewCommunityHandler(commUC)
 	commHandler.RegisterRoutes(cfg.JWTSecret)
+
+	// Export CSV/Excel de wallets de comunidad
+	commWalletRepo := repository.NewPostgresCommunityWalletRepository(db)
+	commWalletExportHandler := handler.NewCommunityWalletExportHandler(commWalletRepo, assetWalletRepo)
+	commWalletExportHandler.RegisterRoutes(cfg.JWTSecret)
 
 	postRepo := repository.NewPostgresPostRepository(db)
 	postUC := usecase.NewPostUsecase(postRepo, commRepo, userRepo, followUC, dispatcher)
@@ -171,6 +180,13 @@ func main() {
 	fiscalUC := usecase.NewFiscalReportUsecase(userRepo, walletRepo, assetWalletRepo, marketUC, pdfGen, tokenRepo)
 	fiscalHandler := handler.NewFiscalReportHandler(fiscalUC)
 	fiscalHandler.RegisterRoutes(cfg.JWTSecret)
+
+	// Balance + MercadoPago
+	balanceRepo := repository.NewPostgresBalanceRepository(db)
+	mpClient := mercadopago.NewClient(cfg.MPAccessToken)
+	balanceUC := usecase.NewBalanceUsecase(balanceRepo, mpClient, cfg.BackendURL)
+	balanceHandler := handler.NewBalanceHandler(balanceUC)
+	balanceHandler.RegisterRoutes(cfg.JWTSecret)
 
 	alertWorker := worker.NewPriceAlertWorker(priceAlertRepo, yahooClient, dispatcher)
 
@@ -213,7 +229,7 @@ func main() {
 		recHandler := handler.NewRecommendationHandler(recUC)
 		recHandler.RegisterRoutes(cfg.JWTSecret)
 
-		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletMemberRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo)
+		chatUC := usecase.NewChatUsecase(chatRepo, aiProvider, userRepo, walletMemberRepo, assetWalletRepo, marketUC, newsSvc, tokenRepo, balanceUC)
 		chatHandler := handler.NewChatHandler(chatUC)
 		chatHandler.RegisterRoutes(cfg.JWTSecret)
 	} else {
