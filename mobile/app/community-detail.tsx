@@ -2,13 +2,15 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
     StyleSheet, ActivityIndicator, Modal, ScrollView,
-    RefreshControl, Platform, SafeAreaView, Pressable,
+    RefreshControl, Platform, SafeAreaView, Pressable, Alert, Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { API_URL, getValidToken } from '@/utils/api';
 import Markdown from 'react-native-markdown-display';
 import AppTextInput from '@/components/AppTextInput';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1136,6 +1138,32 @@ export default function CommunityDetailScreen() {
         });
     };
 
+    const handleExportWallets = async (format: 'csv' | 'xlsx') => {
+        try {
+            const token = await getValidToken();
+            const url = `${API_URL}/communities/${communityInfo.id}/wallets/export?format=${format}`;
+
+            if (Platform.OS === 'web') {
+                // En web, abrir en nueva pestaña para descargar
+                window.open(`${url}&token=${token}`, '_blank');
+            } else {
+                // En mobile, descargar y compartir
+                const filename = `community_wallets.${format}`;
+                const fileUri = (FileSystem as any).documentDirectory + filename;
+                const download = await (FileSystem as any).downloadAsync(url, fileUri, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (download.status === 200) {
+                    await Sharing.shareAsync(download.uri);
+                } else {
+                    Alert.alert('Error', 'No se pudo descargar el archivo');
+                }
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Error al exportar wallets');
+        }
+    };
+
     const handleDeleteCommunity = () => {
         showDlg({
             title: 'Eliminar comunidad', message: '¿Estás seguro? Se eliminarán todos los posts y miembros.',
@@ -1366,6 +1394,11 @@ export default function CommunityDetailScreen() {
                 <ScrollView contentContainerStyle={s.aboutContent}>
                     {communityInfo.is_private && <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Solicitudes</Text><ManageRow icon="pending-actions" label="Ver solicitudes pendientes" sub="Aprobar o rechazar nuevos miembros" onPress={() => setShowRequests(true)} /></View>}
                     <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Miembros</Text><ManageRow icon="manage-accounts" label="Gestionar miembros" sub="Ver, expulsar o cambiar roles" onPress={() => setShowMembers(true)} /></View>
+                    <View style={s.aboutCard}>
+                        <Text style={s.aboutCardTitle}>Wallets</Text>
+                        <ManageRow icon="download" label="Exportar wallets (CSV)" sub="Descargar activos de la comunidad" onPress={() => handleExportWallets('csv')} />
+                        <ManageRow icon="table-chart" label="Exportar wallets (Excel)" sub="Descargar en formato .xlsx" onPress={() => handleExportWallets('xlsx')} />
+                    </View>
                     {myRole === 'owner' && (
                         <View style={s.aboutCard}>
                             <Text style={s.aboutCardTitle}>Comunidad</Text>

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/platform/mercadopago"
@@ -45,6 +46,19 @@ func (uc *BalanceUsecase) CreateTopup(ctx context.Context, userID uuid.UUID, amo
 	amountUSD := amountARS / defaultARStoUSD
 	paymentID := uuid.New()
 
+	notifURL := ""
+	backURLs := mercadopago.BackURLs{}
+	autoReturn := ""
+	if !strings.Contains(uc.baseURL, "localhost") {
+		notifURL = uc.baseURL + "/webhooks/mercadopago"
+		backURLs = mercadopago.BackURLs{
+			Success: uc.baseURL + "/balance/callback?status=success",
+			Failure: uc.baseURL + "/balance/callback?status=failure",
+			Pending: uc.baseURL + "/balance/callback?status=pending",
+		}
+		autoReturn = "approved"
+	}
+
 	pref, err := uc.mpClient.CreatePreference(mercadopago.PreferenceRequest{
 		Items: []mercadopago.PreferenceItem{{
 			Title:      "VecFin - Carga de saldo IA",
@@ -52,14 +66,10 @@ func (uc *BalanceUsecase) CreateTopup(ctx context.Context, userID uuid.UUID, amo
 			UnitPrice:  amountARS,
 			CurrencyID: "ARS",
 		}},
-		BackURLs: mercadopago.BackURLs{
-			Success: uc.baseURL + "/balance/callback?status=success",
-			Failure: uc.baseURL + "/balance/callback?status=failure",
-			Pending: uc.baseURL + "/balance/callback?status=pending",
-		},
+		BackURLs:    backURLs,
 		ExternalRef: paymentID.String(),
-		NotifURL:    uc.baseURL + "/webhooks/mercadopago",
-		AutoReturn:  "approved",
+		NotifURL:    notifURL,
+		AutoReturn:  autoReturn,
 	})
 	if err != nil {
 		return "", fmt.Errorf("crear preferencia MP: %w", err)

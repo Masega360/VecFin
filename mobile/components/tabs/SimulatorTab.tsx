@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
-    StyleSheet, ActivityIndicator, Keyboard, ScrollView
+    StyleSheet, ActivityIndicator, Keyboard, ScrollView, Dimensions
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { API_URL, getValidToken } from '@/utils/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,6 +53,32 @@ const formatCurrency = (value: number) => {
         maximumFractionDigits: 2
     });
 };
+
+const formatCompact = (value: number) => {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(0)}k`;
+    return `${Math.round(value)}`;
+};
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CHART_WIDTH = SCREEN_WIDTH - 16 * 2 - 16 * 2; // padding root + padding card
+
+const SERIES_COLORS = ['#00b4d8', '#34c78a', '#f4a340'];
+
+// ─── Chart data builders ────────────────────────────────────────────────────
+
+function buildGrowthCurve(amount: number, teaDecimal: number, days: number) {
+    const stepsCount = Math.max(1, Math.min(days, 12));
+    const step = days / stepsCount;
+
+    const points = [];
+    for (let i = 0; i <= stepsCount; i++) {
+        const d = Math.round(step * i);
+        const value = amount * Math.pow(1 + teaDecimal, d / 365);
+        points.push({ value, label: `${d}d` });
+    }
+    return points;
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -107,6 +134,134 @@ function ResultCard({ item }: { item: SimulationResult }) {
                 <Text style={s.finalAmountLabel}>Monto Final (al vto.)</Text>
                 <Text style={s.finalAmountValue}>{formatCurrency(item.final_amount)}</Text>
             </View>
+        </View>
+    );
+}
+
+function GrowthChartCard({ results, days }: { results: SimulationResult[]; days: string }) {
+    const top = results.slice(0, 3);
+    if (top.length === 0) return null;
+
+    const series = top.map((r, idx) => ({
+        name: r.plan.financier_name,
+        color: SERIES_COLORS[idx % SERIES_COLORS.length],
+        data: buildGrowthCurve(r.initial_amount, (r.tea ?? 0) / 100, Number(days) || 1),
+    }));
+
+    // gifted-charts pinta cada serie con su propio dataset (data, data2, data3)
+    const [d1, d2, d3] = series.map(s => s.data);
+
+    return (
+        <View style={s.chartCard}>
+            <Text style={s.chartTitle}>Evolución proyectada del capital</Text>
+
+            <View style={s.legendRow}>
+                {series.map(sr => (
+                    <View key={sr.name} style={s.legendItem}>
+                        <View style={[s.legendDot, { backgroundColor: sr.color }]} />
+                        <Text style={s.legendText} numberOfLines={1}>{sr.name}</Text>
+                    </View>
+                ))}
+            </View>
+
+            <LineChart
+                data={d1}
+                data2={d2}
+                data3={d3}
+                color1={series[0]?.color}
+                color2={series[1]?.color}
+                color3={series[2]?.color}
+                thickness={2.5}
+                isAnimated
+                animationDuration={900}
+                curved
+                areaChart
+                startFillColor1={series[0]?.color}
+                startFillColor2={series[1]?.color}
+                startFillColor3={series[2]?.color}
+                startOpacity={0.18}
+                endOpacity={0.01}
+                rulesType="dashed"
+                rulesColor="#132238"
+                hideDataPoints={false}
+                dataPointsRadius={3}
+                yAxisTextStyle={{ color: '#7a9ab0', fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: '#7a9ab0', fontSize: 10 }}
+                xAxisColor="#1a2d42"
+                yAxisColor="#1a2d42"
+                yAxisLabelWidth={44}
+                formatYLabel={(v: string) => formatCompact(Number(v))}
+                initialSpacing={12}
+                endSpacing={12}
+                width={CHART_WIDTH - 60}
+                noOfSections={4}
+                backgroundColor="transparent"
+                pointerConfig={{
+                    pointerStripHeight: 150,
+                    pointerStripColor: '#1a2d42',
+                    pointerStripWidth: 1,
+                    pointerColor: '#00b4d8',
+                    radius: 4,
+                    pointerLabelWidth: 160,
+                    pointerLabelHeight: 100,
+                    autoAdjustPointerLabelPosition: true,
+                    pointerLabelComponent: (items: any[]) => (
+                        <View style={s.tooltip}>
+                            <Text style={s.tooltipDay}>A {items?.[0]?.label ?? ''}</Text>
+                            {items.map((it, idx) => (
+                                <View key={idx} style={s.tooltipRow}>
+                                    <View style={[s.legendDot, { backgroundColor: series[idx]?.color }]} />
+                                    <Text style={s.tooltipText} numberOfLines={1}>
+                                        {formatCurrency(it?.value ?? 0)}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    ),
+                }}
+            />
+        </View>
+    );
+}
+
+function ComparisonBarChartCard({ results }: { results: SimulationResult[] }) {
+    const top = results.slice(0, 5);
+    if (top.length === 0) return null;
+
+    const barData = top.map((r, idx) => ({
+        value: r.final_amount,
+        label: r.plan.financier_name.split(' ')[0],
+        frontColor: r.plan.type === 'fci' ? '#00b4d8' : '#34c78a',
+        gradientColor: r.plan.type === 'fci' ? '#0a3a4a' : '#123a2b',
+        topLabelComponent: () => (
+            <Text style={s.barTopLabel}>{formatCompact(r.final_amount)}</Text>
+        ),
+    }));
+
+    return (
+        <View style={s.chartCard}>
+            <Text style={s.chartTitle}>Comparativa de monto final</Text>
+
+            <BarChart
+                data={barData}
+                isAnimated
+                animationDuration={800}
+                barBorderRadius={6}
+                barWidth={32}
+                spacing={22}
+                showGradient
+                yAxisTextStyle={{ color: '#7a9ab0', fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: '#7a9ab0', fontSize: 10 }}
+                xAxisColor="#1a2d42"
+                yAxisColor="#1a2d42"
+                yAxisLabelWidth={44}
+                formatYLabel={(v: string) => formatCompact(Number(v))}
+                rulesType="dashed"
+                rulesColor="#132238"
+                noOfSections={4}
+                width={CHART_WIDTH - 60}
+                backgroundColor="transparent"
+            />
         </View>
     );
 }
@@ -295,6 +450,13 @@ export default function SimulatorTab() {
                 </TouchableOpacity>
             </View>
 
+            {hasSearched && !loading && results.length > 0 && (
+                <>
+                    <GrowthChartCard results={results} days={days} />
+                    <ComparisonBarChartCard results={results} />
+                </>
+            )}
+
             {hasSearched && !loading && (
                 <Text style={s.resultsTitle}>Mejores opciones para {days} días</Text>
             )}
@@ -442,6 +604,77 @@ const s = StyleSheet.create({
     errorText: {
         color: '#e05c5c',
         fontSize: 13,
+    },
+
+    // Charts
+    chartCard: {
+        backgroundColor: '#0d1826',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#1a2d42',
+        marginBottom: 16,
+    },
+    chartTitle: {
+        color: '#e8f4f8',
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 12,
+    },
+    legendRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 12,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        maxWidth: 140,
+    },
+    legendDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    legendText: {
+        color: '#7a9ab0',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    barTopLabel: {
+        color: '#7a9ab0',
+        fontSize: 9,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+
+    // Tooltip interactivo del gráfico de línea
+    tooltip: {
+        backgroundColor: '#0a1628',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#1a2d42',
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        gap: 4,
+    },
+    tooltipDay: {
+        color: '#7a9ab0',
+        fontSize: 10,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    tooltipRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    tooltipText: {
+        color: '#e8f4f8',
+        fontSize: 12,
+        fontWeight: '600',
     },
 
     resultsTitle: {

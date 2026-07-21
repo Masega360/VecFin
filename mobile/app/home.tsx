@@ -14,6 +14,7 @@ import SimulatorTab from '@/components/tabs/SimulatorTab';
 import ExchangesTab from '@/components/tabs/ExchangesTab';
 import RecommendationsTab from '@/components/tabs/RecommendationsTab';
 import ChatTab from '@/components/tabs/ChatTab';
+import BalanceTab from '@/components/tabs/BalanceTab';
 import NewsTab from '@/components/tabs/NewsTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import NotificationsTab from '@/components/tabs/NotificationsTab';
@@ -92,6 +93,12 @@ const TABS: TabConfig[] = [
     label: 'Chat IA',
     icon: 'chat',
     component: ChatTab,
+  },
+  {
+    id: 'balance',
+    label: 'Saldo',
+    icon: 'payments',
+    component: BalanceTab,
   },
   {
     id: 'community',

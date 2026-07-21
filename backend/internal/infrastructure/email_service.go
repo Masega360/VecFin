@@ -17,7 +17,7 @@ type SMTPConfig struct {
 }
 
 type NotificationProvider interface {
-	Send(userID uuid.UUID, title, message string) error
+	Send(userID uuid.UUID, title, message, link string) error
 }
 
 type EmailService struct {
@@ -32,7 +32,7 @@ func NewEmailService(userRepo domain.UserRepository, config SMTPConfig) *EmailSe
 	}
 }
 
-func (s *EmailService) Send(userID uuid.UUID, title, message string) error {
+func (s *EmailService) Send(userID uuid.UUID, title, message, link string) error {
 	user, err := s.UserRepo.FindByID(userID)
 	if err != nil {
 		return fmt.Errorf("no se encontró el usuario para enviar mail: %w", err)

@@ -40,10 +40,17 @@ func (d *NotificationDispatcher) getSettingsOrDefault(userID uuid.UUID) domain.N
 	return settings
 }
 
-func (d *NotificationDispatcher) dispatchToChannels(userID uuid.UUID, channels []domain.ChannelPreference, title, message string) {
+const (
+	linkDashboard = "/home?tab=dashboard"
+	linkProfile   = "/home?tab=profile"
+	linkCommunity = "/home?tab=community"
+	linkAsset     = "/home?tab=asset"
+)
+
+func (d *NotificationDispatcher) dispatchToChannels(userID uuid.UUID, channels []domain.ChannelPreference, title, message, link string) {
 	for _, channel := range channels {
 		if provider, exists := d.providers[channel]; exists {
-			err := provider.Send(userID, title, message)
+			err := provider.Send(userID, title, message, link)
 			if err != nil {
 				log.Printf("[Dispatcher] Error enviando a %s por canal %s: %v\n", userID, channel, err)
 			}
@@ -68,7 +75,7 @@ func (d *NotificationDispatcher) DispatchPriceAlert(alert domain.PriceAlert, cur
 		alert.Symbol, alert.TargetPrice, currentPrice,
 	)
 
-	d.dispatchToChannels(alert.UserID, settings.EnabledChannels, title, message)
+	d.dispatchToChannels(alert.UserID, settings.EnabledChannels, title, message, linkAsset)
 	return nil
 }
 
@@ -87,7 +94,7 @@ func (d *NotificationDispatcher) DispatchFollowRequest(targetUserID uuid.UUID, f
 			followerName,
 		)
 
-		d.dispatchToChannels(targetUserID, settings.EnabledChannels, title, message)
+		d.dispatchToChannels(targetUserID, settings.EnabledChannels, title, message, linkProfile)
 	}()
 }
 
@@ -106,7 +113,7 @@ func (d *NotificationDispatcher) DispatchNewMemberRequest(adminIDs []uuid.UUID, 
 			if !settings.NewMembers {
 				continue
 			}
-			d.dispatchToChannels(adminID, settings.EnabledChannels, title, message)
+			d.dispatchToChannels(adminID, settings.EnabledChannels, title, message, linkCommunity)
 		}
 	}()
 }
@@ -130,7 +137,7 @@ func (d *NotificationDispatcher) DispatchJoinRequestResolved(applicantID uuid.UU
 			communityName, estadoStr,
 		)
 
-		d.dispatchToChannels(applicantID, settings.EnabledChannels, title, message)
+		d.dispatchToChannels(applicantID, settings.EnabledChannels, title, message, linkCommunity)
 	}()
 }
 
@@ -148,7 +155,7 @@ func (d *NotificationDispatcher) DispatchMemberKicked(targetID uuid.UUID, commun
 			communityName,
 		)
 
-		d.dispatchToChannels(targetID, settings.EnabledChannels, title, message)
+		d.dispatchToChannels(targetID, settings.EnabledChannels, title, message, linkCommunity)
 	}()
 }
 
@@ -172,7 +179,7 @@ func (d *NotificationDispatcher) DispatchRoleChanged(targetID uuid.UUID, communi
 			rolTexto, communityName,
 		)
 
-		d.dispatchToChannels(targetID, settings.EnabledChannels, title, message)
+		d.dispatchToChannels(targetID, settings.EnabledChannels, title, message, linkCommunity)
 	}()
 }
 
@@ -196,7 +203,7 @@ func (d *NotificationDispatcher) DispatchPostReply(authorID uuid.UUID, postTitle
 			replierName, targetStr,
 		)
 
-		d.dispatchToChannels(authorID, settings.EnabledChannels, title, message)
+		d.dispatchToChannels(authorID, settings.EnabledChannels, title, message, linkCommunity)
 	}()
 }
 
@@ -224,6 +231,6 @@ func (d *NotificationDispatcher) DispatchPostVote(authorID uuid.UUID, postTitle 
 			accion, targetStr,
 		)
 
-		d.dispatchToChannels(authorID, settings.EnabledChannels, title, message)
+		d.dispatchToChannels(authorID, settings.EnabledChannels, title, message, linkCommunity)
 	}()
 }

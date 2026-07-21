@@ -16,7 +16,7 @@ func NewInAppService(repo domain.InAppNotificationRepository) *InAppService {
 	return &InAppService{repo: repo}
 }
 
-func (s *InAppService) Send(userID uuid.UUID, title, message string) error {
+func (s *InAppService) Send(userID uuid.UUID, title, message, link string) error {
 	notif := domain.InAppNotification{
 		ID:        uuid.New(),
 		UserID:    userID,

@@ -1,9 +1,15 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
+
+// En desarrollo, usa la IP del servidor Expo (que es la misma máquina donde corre el backend)
+const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
 
 export const API_URL =
-    Platform.OS === 'android' ? 'http://172.22.43.227:8080' : 'http://localhost:8080';
+    Platform.OS === 'web'
+        ? (window.location.hostname === 'localhost' ? 'http://localhost:8080' : `http://${window.location.hostname}:8080`)
+        : `http://${devHost}:8080`;
 function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));

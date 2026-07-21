@@ -162,6 +162,11 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, sessionID, userID uuid.U
 		return domain.ChatMessage{}, err
 	}
 
+	// El modelo a veces vuelca el JSON crudo del activo en vez de un análisis.
+	// Lo limpiamos y adjuntamos nosotros la tarjeta ```asset``` de forma
+	// determinística, así el gráfico siempre se muestra bien.
+	reply.Content = attachAssetCards(reply.Content, toolExec.assetCards)
+
 	// Record token usage + deduct balance
 	if reply.InputTokens > 0 || reply.OutputTokens > 0 {
 		cost := domain.CalculateCost(reply.Provider, reply.InputTokens, reply.OutputTokens)
@@ -248,12 +253,20 @@ func (uc *ChatUsecase) buildUserContext(ctx context.Context, userID uuid.UUID) s
 	return sb.String()
 }
 
-
 // ─── ChatToolExecutor implementation ──────────────────────────────────────────
 
+// assetCard es la tarjeta de un activo (contenido del bloque ```asset```) que
+// adjunta el backend al final de la respuesta. El modelo NO debe reescribir este
+// JSON: solo redacta el análisis en texto.
+type assetCard struct {
+	Symbol string
+	JSON   string
+}
+
 type chatToolExec struct {
-	market chatMarketService
-	news   chatNewsProvider
+	market     chatMarketService
+	news       chatNewsProvider
+	assetCards []assetCard
 }
 
 func (t *chatToolExec) SearchNews(query string) string {
@@ -289,7 +302,22 @@ func (t *chatToolExec) GetAssetPrice(symbol string) string {
 		"volume":     details.Volume,
 		"history":    history,
 	})
-	return "Incluí este bloque exacto en tu respuesta para mostrar el asset inline:\n```asset\n" + string(data) + "\n```"
+
+	// Guardamos la tarjeta para adjuntarla nosotros al final de la respuesta.
+	// Al modelo NO le devolvemos el JSON completo (para que no lo copie en crudo),
+	// solo un resumen corto y la instrucción de no escribir datos crudos.
+	t.assetCards = append(t.assetCards, assetCard{Symbol: details.Symbol, JSON: string(data)})
+
+	sign := "+"
+	if details.Change < 0 {
+		sign = ""
+	}
+	return fmt.Sprintf(
+		"Precio de %s (%s): %.6g %s (%s%.2f%%). "+
+			"La tarjeta visual con el precio y el gráfico se agrega automáticamente al final de tu respuesta. "+
+			"NO escribas JSON ni repitas estos números en crudo: redactá únicamente tu análisis en lenguaje natural.",
+		details.Name, details.Symbol, details.Price, details.Currency, sign, details.ChangePct,
+	)
 }
 
 func (t *chatToolExec) SearchAssets(query string) string {
@@ -302,4 +330,54 @@ func (t *chatToolExec) SearchAssets(query string) string {
 		fmt.Fprintf(&sb, "- %s (%s) [%s]\n", a.Symbol, a.Name, a.Type)
 	}
 	return sb.String()
+}
+
+// attachAssetCards limpia cualquier JSON de asset que el modelo haya volcado en
+// crudo y adjunta al final las tarjetas ```asset``` capturadas durante las tool
+// calls, evitando duplicados.
+func attachAssetCards(content string, cards []assetCard) string {
+	content = stripLeakedAssetJSON(content)
+
+	// Si el modelo no dejó texto (solo había volcado JSON), ponemos una intro breve.
+	if strings.TrimSpace(content) == "" && len(cards) > 0 {
+		content = "Acá tenés los datos actualizados:"
+	}
+
+	for _, c := range cards {
+		// Si ya existe un bloque asset para ese símbolo, no lo duplicamos.
+		if strings.Contains(content, "```asset") && strings.Contains(content, `"`+c.Symbol+`"`) {
+			continue
+		}
+		block := "```asset\n" + c.JSON + "\n```"
+		if strings.TrimSpace(content) == "" {
+			content = block
+		} else {
+			content = strings.TrimRight(content, "\n") + "\n\n" + block
+		}
+	}
+	return strings.TrimSpace(content)
+}
+
+// stripLeakedAssetJSON detecta un volcado de JSON de asset fuera de un bloque
+// ```asset``` (ej. {"change":...,"history":[...]}) y lo elimina, dejando solo el
+// texto de análisis. Contempla JSON truncado por límite de tokens.
+func stripLeakedAssetJSON(content string) string {
+	marker := `"history"`
+	idx := strings.Index(content, marker)
+	if idx == -1 {
+		return content
+	}
+	// Inicio del objeto JSON: la última "{" antes de "history".
+	start := strings.LastIndex(content[:idx], "{")
+	if start == -1 {
+		return content
+	}
+	// Si ese "{" está dentro de un bloque ```asset``` legítimo, no tocamos nada.
+	lastFence := strings.LastIndex(content[:start], "```asset")
+	if lastFence != -1 && !strings.Contains(content[lastFence+len("```asset"):start], "```") {
+		return content
+	}
+	// El volcado suele ser lo último del mensaje (a veces truncado): cortamos
+	// desde el inicio del objeto crudo y conservamos el texto previo.
+	return strings.TrimSpace(content[:start])
 }

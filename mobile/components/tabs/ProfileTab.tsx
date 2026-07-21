@@ -50,6 +50,7 @@ export default function ProfileTab() {
   const [pendingRequests, setPendingRequests] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [exportingFiscal, setExportingFiscal] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
 
@@ -183,8 +184,10 @@ export default function ProfileTab() {
     }
   };
   const handleExportFiscal = async () => {
+    if (exportingFiscal) return; // evita descargas dobles mientras se genera
     const token = await getValidToken();
     if (!token) return;
+    setExportingFiscal(true);
     try {
       if (Platform.OS === 'web') {
         const res = await fetch(`${API_URL}/users/me/fiscal-report`, {
@@ -218,6 +221,8 @@ export default function ProfileTab() {
       }
     } catch {
       Alert.alert('Error', 'Sin conexión al servidor');
+    } finally {
+      setExportingFiscal(false);
     }
   };
 
@@ -437,12 +442,22 @@ export default function ProfileTab() {
                 <MaterialIcons name="chevron-right" size={20} color="#3d5a70" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={s.settingItem} onPress={handleExportFiscal}>
+              <TouchableOpacity
+                  style={[s.settingItem, exportingFiscal && { opacity: 0.6 }]}
+                  onPress={handleExportFiscal}
+                  disabled={exportingFiscal}
+              >
                 <View style={s.settingItemLeft}>
                   <MaterialIcons name="description" size={20} color="#aab8c8" />
-                  <Text style={s.settingItemText}>Exportar reporte fiscal</Text>
+                  <Text style={s.settingItemText}>
+                    {exportingFiscal ? 'Generando reporte…' : 'Exportar reporte fiscal'}
+                  </Text>
                 </View>
-                <MaterialIcons name="chevron-right" size={20} color="#3d5a70" />
+                {exportingFiscal ? (
+                    <ActivityIndicator size="small" color="#00ADD8" />
+                ) : (
+                    <MaterialIcons name="chevron-right" size={20} color="#3d5a70" />
+                )}
               </TouchableOpacity>
 
               <Text style={s.settingsGroupTitle}>Privacidad y Preferencias</Text>

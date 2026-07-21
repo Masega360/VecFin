@@ -33,14 +33,14 @@ type PreferenceItem struct {
 }
 
 type BackURLs struct {
-	Success string `json:"success"`
-	Failure string `json:"failure"`
-	Pending string `json:"pending"`
+	Success string `json:"success,omitempty"`
+	Failure string `json:"failure,omitempty"`
+	Pending string `json:"pending,omitempty"`
 }
 
 type PreferenceRequest struct {
 	Items       []PreferenceItem `json:"items"`
-	BackURLs    BackURLs         `json:"back_urls"`
+	BackURLs    BackURLs         `json:"back_urls,omitempty"`
 	ExternalRef string           `json:"external_reference"`
 	NotifURL    string           `json:"notification_url,omitempty"`
 	AutoReturn  string           `json:"auto_return,omitempty"`
@@ -55,6 +55,15 @@ type PreferenceResponse struct {
 // CreatePreference crea una preferencia de pago en MercadoPago.
 // Devuelve el ID de la preferencia y la URL de checkout (init_point o sandbox).
 func (c *Client) CreatePreference(req PreferenceRequest) (*PreferenceResponse, error) {
+	// Si no hay access token, devolver mock para demo
+	if c.accessToken == "" {
+		return &PreferenceResponse{
+			ID:               "MOCK-" + req.ExternalRef,
+			InitPoint:        "https://www.mercadopago.com.ar",
+			SandboxInitPoint: "https://sandbox.mercadopago.com.ar",
+		}, nil
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("mp: marshal preference: %w", err)

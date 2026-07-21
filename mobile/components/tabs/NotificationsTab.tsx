@@ -18,6 +18,7 @@ interface InAppNotification {
     user_id: string;
     title: string;
     message: string;
+    link?: string; // ruta interna que manda el backend (ej: "/home?tab=community")
     is_read: boolean;
     created_at: string;
 }
@@ -89,7 +90,15 @@ export default function NotificationsTab() {
         }
     };
 
-    const handleNavigate = (title: string) => {
+    // Extrae el valor de ?tab= de un link tipo "/home?tab=community"
+    const tabFromLink = (link?: string): string | null => {
+        if (!link) return null;
+        const m = link.match(/[?&]tab=([^&]+)/);
+        return m ? decodeURIComponent(m[1]) : null;
+    };
+
+    // Fallback para notificaciones viejas que no traen link: se deduce por el título.
+    const navigateByTitle = (title: string) => {
         const t = title.toLowerCase();
         if (t.includes('comunidad') || t.includes('solicitud en')) {
             router.setParams({ tab: 'community' });
@@ -100,6 +109,22 @@ export default function NotificationsTab() {
         } else if (t.includes('post') || t.includes('publicación')) {
             router.setParams({ tab: 'community' });
         }
+    };
+
+    const handleNavigate = (notif: InAppNotification) => {
+        // 1. Preferimos el link explícito que envía el backend.
+        const tab = tabFromLink(notif.link);
+        if (tab) {
+            router.setParams({ tab });
+            return;
+        }
+        // 2. Link a una pantalla que no es una tab del home (ej. un detalle).
+        if (notif.link && notif.link.startsWith('/') && !notif.link.startsWith('/home')) {
+            router.push(notif.link as any);
+            return;
+        }
+        // 3. Sin link: usamos el título como antes.
+        navigateByTitle(notif.title);
     };
 
     const getActionText = (title: string) => {
@@ -173,7 +198,7 @@ export default function NotificationsTab() {
                                 {isExpanded && (
                                     <TouchableOpacity
                                         style={s.actionBtn}
-                                        onPress={() => handleNavigate(item.title)}
+                                        onPress={() => handleNavigate(item)}
                                     >
                                         <Text style={s.actionBtnText}>{getActionText(item.title)}</Text>
                                         <MaterialIcons name="arrow-forward" size={16} color="#00ADD8" />
