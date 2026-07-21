@@ -25,6 +25,7 @@ import (
 	"github.com/Masega360/vecfin/backend/internal/platform/bedrock"
 	"github.com/Masega360/vecfin/backend/internal/platform/binance"
 	"github.com/Masega360/vecfin/backend/internal/platform/iol"
+	"github.com/Masega360/vecfin/backend/internal/platform/kraken"
 	"github.com/Masega360/vecfin/backend/internal/platform/gemini"
 	"github.com/Masega360/vecfin/backend/internal/platform/mercadopago"
 	"github.com/Masega360/vecfin/backend/internal/platform/news"
@@ -134,6 +135,7 @@ func main() {
 	exchanges := map[string]domain.ExchangeService{
 		"binance": binance.NewClient(),
 		"iol":     iol.NewClient(),
+		"kraken":  kraken.NewClient(),
 	}
 	walletUC := usecase.NewWalletsUseCase(walletRepo, assetWalletRepo, marketUC, platformRepo, exchanges, followUC, walletMemberRepo, transferRepo)
 	walletHandler := handler.NewWalletHandler(walletUC)
