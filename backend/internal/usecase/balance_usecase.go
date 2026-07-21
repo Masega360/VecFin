@@ -53,6 +53,7 @@ func (uc *BalanceUsecase) CreateTopup(ctx context.Context, userID uuid.UUID, amo
 			CurrencyID: "ARS",
 		}},
 		ExternalRef: paymentID.String(),
+		NotifURL:    uc.baseURL + "/webhooks/mercadopago",
 	})
 	if err != nil {
 		return "", fmt.Errorf("crear preferencia MP: %w", err)
