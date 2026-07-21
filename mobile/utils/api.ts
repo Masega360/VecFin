@@ -1,15 +1,26 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import Constants from 'expo-constants';
 
-// En desarrollo, usa la IP del servidor Expo (que es la misma máquina donde corre el backend)
-const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+// Backend URL - en producción usa el tunnel HTTPS, en dev usa localhost
+const PROD_API = 'https://headline-period-consumers-attract.trycloudflare.com';
 
-export const API_URL =
-    Platform.OS === 'web'
-        ? (window.location.hostname === 'localhost' ? 'http://localhost:8080' : `http://${window.location.hostname}:8080`)
-        : `http://${devHost}:8080`;
+function getApiUrl(): string {
+    if (Platform.OS === 'web') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+        if (host === 'localhost') return 'http://localhost:8080';
+        return PROD_API;
+    }
+    try {
+        const Constants = require('expo-constants').default;
+        const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+        return `http://${devHost}:8080`;
+    } catch {
+        return 'http://localhost:8080';
+    }
+}
+
+export const API_URL = getApiUrl();
 function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
