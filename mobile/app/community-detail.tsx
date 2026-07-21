@@ -1465,6 +1465,8 @@ export default function CommunityDetailScreen() {
                     )}
                 </ScrollView>
             )}
+
+            {activeTab === 'manage' && canManage && (
                 <ScrollView contentContainerStyle={s.aboutContent}>
                     {communityInfo.is_private && <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Solicitudes</Text><ManageRow icon="pending-actions" label="Ver solicitudes pendientes" sub="Aprobar o rechazar nuevos miembros" onPress={() => setShowRequests(true)} /></View>}
                     <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Miembros</Text><ManageRow icon="manage-accounts" label="Gestionar miembros" sub="Ver, expulsar o cambiar roles" onPress={() => setShowMembers(true)} /></View>
