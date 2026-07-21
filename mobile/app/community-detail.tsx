@@ -1200,8 +1200,17 @@ export default function CommunityDetailScreen() {
             const url = `${API_URL}/communities/${communityInfo.id}/wallets/export?format=${format}`;
 
             if (Platform.OS === 'web') {
-                // En web, abrir en nueva pestaña para descargar
-                window.open(`${url}&token=${token}`, '_blank');
+                const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+                if (!res.ok) { Alert.alert('Error', 'No se pudo exportar'); return; }
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `community_wallets.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
             } else {
                 // En mobile, descargar y compartir
                 const filename = `community_wallets.${format}`;
