@@ -1027,6 +1027,7 @@ export default function CommunityDetailScreen() {
     const [showMembers, setShowMembers] = useState(false);
     const [showRequests, setShowRequests] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
+    const [communityWallets, setCommunityWallets] = useState<{id: string; name: string}[]>([]);
 
     // Estado para editar un post desde la lista
     const [editingPost, setEditingPost] = useState<Post | null>(null);
@@ -1094,6 +1095,10 @@ export default function CommunityDetailScreen() {
                 .then(res => res.ok ? res.json() : [])
                 .then(data => setAboutMembers(data ?? []))
                 .finally(() => setAboutMembersLoading(false));
+            loadCommunityWallets();
+        }
+        if (activeTab === 'manage') {
+            loadCommunityWallets();
         }
     }, [activeTab]);
 
@@ -1136,6 +1141,50 @@ export default function CommunityDetailScreen() {
                 } catch { showDlg({ title: 'Error', message: 'Sin conexión', confirmLabel: 'OK', onConfirm: hideDlg, onCancel: hideDlg }); }
             },
         });
+    };
+
+    const loadCommunityWallets = async () => {
+        try {
+            const res = await authFetch(`${API_URL}/communities/${communityInfo.id}/wallets`);
+            if (res.ok) setCommunityWallets(await res.json());
+        } catch {}
+    };
+
+    const handleLinkWallet = async () => {
+        try {
+            // Primero obtenemos las wallets del usuario
+            const res = await authFetch(`${API_URL}/wallets`);
+            if (!res.ok) return;
+            const myWallets = await res.json();
+            if (!myWallets || myWallets.length === 0) {
+                Alert.alert('Sin wallets', 'No tenés wallets para vincular');
+                return;
+            }
+            // Vincular la primera que no esté ya vinculada
+            const linked = new Set(communityWallets.map((w: any) => w.id));
+            const available = myWallets.filter((w: any) => !linked.has(w.id));
+            if (available.length === 0) {
+                Alert.alert('Info', 'Todas tus wallets ya están vinculadas');
+                return;
+            }
+            // Vincular la primera disponible (para simplificar)
+            const wallet = available[0];
+            const linkRes = await authFetch(`${API_URL}/communities/${communityInfo.id}/wallets`, {
+                method: 'POST',
+                body: JSON.stringify({ wallet_id: wallet.id }),
+            });
+            if (linkRes.ok) {
+                loadCommunityWallets();
+                Alert.alert('✅', `Wallet "${wallet.name}" vinculada a la comunidad`);
+            }
+        } catch {}
+    };
+
+    const handleUnlinkWallet = async (walletId: string) => {
+        try {
+            const res = await authFetch(`${API_URL}/communities/${communityInfo.id}/wallets/${walletId}`, { method: 'DELETE' });
+            if (res.ok) loadCommunityWallets();
+        } catch {}
     };
 
     const handleExportWallets = async (format: 'csv' | 'xlsx') => {
@@ -1387,17 +1436,40 @@ export default function CommunityDetailScreen() {
                             ))
                         )}
                     </View>
+                    {communityWallets.length > 0 && (
+                        <View style={s.aboutCard}>
+                            <View style={s.aboutCardHeader}><MaterialIcons name="account-balance-wallet" size={16} color="#00b4d8" /><Text style={s.aboutCardTitle}>Wallets compartidas ({communityWallets.length})</Text></View>
+                            {communityWallets.map((cw: any) => (
+                                <View key={cw.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 8 }}>
+                                    <MaterialIcons name="wallet" size={16} color="#7a9ab0" />
+                                    <Text style={{ color: '#e0e0e0', fontSize: 14 }}>{cw.name}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </ScrollView>
             )}
-
-            {activeTab === 'manage' && canManage && (
                 <ScrollView contentContainerStyle={s.aboutContent}>
                     {communityInfo.is_private && <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Solicitudes</Text><ManageRow icon="pending-actions" label="Ver solicitudes pendientes" sub="Aprobar o rechazar nuevos miembros" onPress={() => setShowRequests(true)} /></View>}
                     <View style={s.aboutCard}><Text style={s.aboutCardTitle}>Miembros</Text><ManageRow icon="manage-accounts" label="Gestionar miembros" sub="Ver, expulsar o cambiar roles" onPress={() => setShowMembers(true)} /></View>
                     <View style={s.aboutCard}>
-                        <Text style={s.aboutCardTitle}>Wallets</Text>
-                        <ManageRow icon="download" label="Exportar wallets (CSV)" sub="Descargar activos de la comunidad" onPress={() => handleExportWallets('csv')} />
-                        <ManageRow icon="table-chart" label="Exportar wallets (Excel)" sub="Descargar en formato .xlsx" onPress={() => handleExportWallets('xlsx')} />
+                        <Text style={s.aboutCardTitle}>Wallets de la comunidad</Text>
+                        <ManageRow icon="add-circle-outline" label="Vincular mi wallet" sub="Compartir una wallet con la comunidad" onPress={handleLinkWallet} />
+                        {communityWallets.map(cw => (
+                            <View key={cw.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12 }}>
+                                <MaterialIcons name="account-balance-wallet" size={16} color="#00b4d8" />
+                                <Text style={{ color: '#e8f4f8', flex: 1, marginLeft: 8, fontSize: 14 }}>{cw.name}</Text>
+                                <TouchableOpacity onPress={() => handleUnlinkWallet(cw.id)}>
+                                    <MaterialIcons name="link-off" size={18} color="#e05c5c" />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                        {communityWallets.length > 0 && (
+                            <>
+                                <ManageRow icon="download" label="Exportar wallets (CSV)" sub="Descargar activos de la comunidad" onPress={() => handleExportWallets('csv')} />
+                                <ManageRow icon="table-chart" label="Exportar wallets (Excel)" sub="Descargar en formato .xlsx" onPress={() => handleExportWallets('xlsx')} />
+                            </>
+                        )}
                     </View>
                     {myRole === 'owner' && (
                         <View style={s.aboutCard}>

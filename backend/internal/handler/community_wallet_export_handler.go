@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -39,6 +40,9 @@ func NewCommunityWalletExportHandler(
 func (h *CommunityWalletExportHandler) RegisterRoutes(jwtSecret string) {
 	auth := middleware.RequireAuth(jwtSecret)
 	http.HandleFunc("GET /communities/{id}/wallets/export", auth(h.Export))
+	http.HandleFunc("GET /communities/{id}/wallets", auth(h.ListWallets))
+	http.HandleFunc("POST /communities/{id}/wallets", auth(h.LinkWallet))
+	http.HandleFunc("DELETE /communities/{id}/wallets/{wallet_id}", auth(h.UnlinkWallet))
 }
 
 // Export genera un archivo CSV o Excel con los assets de todas las wallets de la comunidad.
@@ -160,4 +164,106 @@ func (h *CommunityWalletExportHandler) exportExcel(w http.ResponseWriter, rows [
 	if err := f.Write(w); err != nil {
 		http.Error(w, "error generando excel", http.StatusInternalServerError)
 	}
+}
+
+// ListWallets devuelve las wallets vinculadas a la comunidad.
+func (h *CommunityWalletExportHandler) ListWallets(w http.ResponseWriter, r *http.Request) {
+	userStr, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	if _, err := uuid.Parse(userStr); err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	communityID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "id de comunidad inválido", http.StatusBadRequest)
+		return
+	}
+
+	wallets, err := h.communityWalletRepo.ListByCommunity(r.Context(), communityID)
+	if err != nil {
+		http.Error(w, "error al obtener wallets", http.StatusInternalServerError)
+		return
+	}
+	if wallets == nil {
+		wallets = []domain.Wallet{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(wallets)
+}
+
+// LinkWallet vincula una wallet a la comunidad.
+// Body: { "wallet_id": "uuid" }
+func (h *CommunityWalletExportHandler) LinkWallet(w http.ResponseWriter, r *http.Request) {
+	userStr, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	if _, err := uuid.Parse(userStr); err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	communityID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "id de comunidad inválido", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		WalletID string `json:"wallet_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "solicitud inválida", http.StatusBadRequest)
+		return
+	}
+	walletID, err := uuid.Parse(body.WalletID)
+	if err != nil {
+		http.Error(w, "wallet_id inválido", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.communityWalletRepo.Link(r.Context(), communityID, walletID); err != nil {
+		http.Error(w, "error al vincular wallet", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+// UnlinkWallet desvincula una wallet de la comunidad.
+func (h *CommunityWalletExportHandler) UnlinkWallet(w http.ResponseWriter, r *http.Request) {
+	userStr, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+	if _, err := uuid.Parse(userStr); err != nil {
+		http.Error(w, "no autorizado", http.StatusUnauthorized)
+		return
+	}
+
+	communityID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "id de comunidad inválido", http.StatusBadRequest)
+		return
+	}
+	walletID, err := uuid.Parse(r.PathValue("wallet_id"))
+	if err != nil {
+		http.Error(w, "wallet_id inválido", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.communityWalletRepo.Unlink(r.Context(), communityID, walletID); err != nil {
+		http.Error(w, "error al desvincular wallet", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
