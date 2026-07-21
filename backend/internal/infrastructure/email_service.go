@@ -50,6 +50,19 @@ func (s *EmailService) Send(userID uuid.UUID, title, message, link string) error
 	// 🚀 FORMATEO: Convertimos los \n del texto plano en <br> para HTML
 	htmlFormattedMessage := strings.ReplaceAll(message, "\n", "<br>")
 
+	// URL de la app
+	appURL := "https://rover-lately-closed-cubic.trycloudflare.com"
+	buttonHTML := ""
+	if link != "" {
+		buttonHTML = fmt.Sprintf(`
+			<a href="%s" style="display: inline-block; margin-top: 24px; padding: 14px 28px; background-color: #00ADD8; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Ir a VecFin</a>
+		`, appURL+link)
+	} else {
+		buttonHTML = fmt.Sprintf(`
+			<a href="%s" style="display: inline-block; margin-top: 24px; padding: 14px 28px; background-color: #00ADD8; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Abrir VecFin</a>
+		`, appURL)
+	}
+
 	// 2. El "Layout Maestro".
 	htmlBody := fmt.Sprintf(`
     <!DOCTYPE html>
@@ -76,6 +89,10 @@ func (s *EmailService) Send(userID uuid.UUID, title, message, link string) error
                                 <div style="margin-top: 24px; font-size: 16px;">
                                     %s
                                 </div>
+
+                                <div style="text-align: center; margin-top: 16px;">
+                                    %s
+                                </div>
                                 
                             </td>
                         </tr>
@@ -93,7 +110,7 @@ func (s *EmailService) Send(userID uuid.UUID, title, message, link string) error
         </table>
     </body>
     </html>
-    `, user.FirstName, htmlFormattedMessage) // Pasamos la variable formateada acá
+    `, user.FirstName, htmlFormattedMessage, buttonHTML) // Pasamos la variable formateada acá
 
 	msg := []byte(headers + htmlBody)
 
