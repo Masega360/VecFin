@@ -1150,9 +1150,11 @@ export default function CommunityDetailScreen() {
         } catch {}
     };
 
+    const [showWalletPicker, setShowWalletPicker] = useState(false);
+    const [availableWallets, setAvailableWallets] = useState<{id: string; name: string}[]>([]);
+
     const handleLinkWallet = async () => {
         try {
-            // Primero obtenemos las wallets del usuario
             const res = await authFetch(`${API_URL}/wallets`);
             if (!res.ok) return;
             const myWallets = await res.json();
@@ -1160,22 +1162,27 @@ export default function CommunityDetailScreen() {
                 Alert.alert('Sin wallets', 'No tenés wallets para vincular');
                 return;
             }
-            // Vincular la primera que no esté ya vinculada
             const linked = new Set(communityWallets.map((w: any) => w.id));
             const available = myWallets.filter((w: any) => !linked.has(w.id));
             if (available.length === 0) {
                 Alert.alert('Info', 'Todas tus wallets ya están vinculadas');
                 return;
             }
-            // Vincular la primera disponible (para simplificar)
-            const wallet = available[0];
-            const linkRes = await authFetch(`${API_URL}/communities/${communityInfo.id}/wallets`, {
+            setAvailableWallets(available);
+            setShowWalletPicker(true);
+        } catch {}
+    };
+
+    const handlePickWallet = async (walletId: string, walletName: string) => {
+        setShowWalletPicker(false);
+        try {
+            const res = await authFetch(`${API_URL}/communities/${communityInfo.id}/wallets`, {
                 method: 'POST',
-                body: JSON.stringify({ wallet_id: wallet.id }),
+                body: JSON.stringify({ wallet_id: walletId }),
             });
-            if (linkRes.ok) {
+            if (res.ok) {
                 loadCommunityWallets();
-                Alert.alert('✅', `Wallet "${wallet.name}" vinculada a la comunidad`);
+                Alert.alert('✅', `Wallet "${walletName}" vinculada a la comunidad`);
             }
         } catch {}
     };
@@ -1502,6 +1509,28 @@ export default function CommunityDetailScreen() {
                 onClose={() => { setShowEditPost(false); setEditingPost(null); }}
                 onSaved={(id, newTitle, newContent) => { handlePostEdited(id, newTitle, newContent); setShowEditPost(false); setEditingPost(null); }}
             />
+
+            {/* Modal selector de wallet */}
+            <Modal visible={showWalletPicker} transparent animationType="fade" onRequestClose={() => setShowWalletPicker(false)}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setShowWalletPicker(false)}>
+                    <View style={{ backgroundColor: '#111e2e', borderRadius: 16, padding: 20, width: '85%', maxHeight: '60%' }}>
+                        <Text style={{ color: '#e8f4f8', fontSize: 18, fontWeight: '700', marginBottom: 16 }}>Elegí una wallet</Text>
+                        <ScrollView>
+                            {availableWallets.map((w: any) => (
+                                <TouchableOpacity key={w.id} onPress={() => handlePickWallet(w.id, w.name)}
+                                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a2d42', gap: 10 }}>
+                                    <MaterialIcons name="account-balance-wallet" size={20} color="#00b4d8" />
+                                    <Text style={{ color: '#e0e0e0', fontSize: 15, flex: 1 }}>{w.name}</Text>
+                                    <MaterialIcons name="add-circle" size={20} color="#4CAF50" />
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        <TouchableOpacity onPress={() => setShowWalletPicker(false)} style={{ marginTop: 16, alignItems: 'center' }}>
+                            <Text style={{ color: '#7a9ab0', fontSize: 14 }}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
 
             <ConfirmDialog {...dlg} />
         </SafeAreaView>
