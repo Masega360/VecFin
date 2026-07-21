@@ -1087,7 +1087,7 @@ export default function CommunityDetailScreen() {
         }
     };
 
-    React.useEffect(() => { loadRole(); loadPosts(1); }, []);
+    React.useEffect(() => { loadRole(); loadPosts(1); loadCommunityWallets(); }, []);
     React.useEffect(() => {
         if (activeTab === 'about' && aboutMembers.length === 0) {
             setAboutMembersLoading(true);
@@ -1482,6 +1482,7 @@ export default function CommunityDetailScreen() {
                         ))}
                         {communityWallets.length > 0 && (
                             <>
+                                <ManageRow icon="picture-as-pdf" label="Exportar wallets (PDF)" sub="Descargar reporte en PDF" onPress={() => handleExportWallets('pdf')} />
                                 <ManageRow icon="download" label="Exportar wallets (CSV)" sub="Descargar activos de la comunidad" onPress={() => handleExportWallets('csv')} />
                                 <ManageRow icon="table-chart" label="Exportar wallets (Excel)" sub="Descargar en formato .xlsx" onPress={() => handleExportWallets('xlsx')} />
                             </>

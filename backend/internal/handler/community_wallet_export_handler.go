@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/Masega360/vecfin/backend/internal/domain"
 	"github.com/Masega360/vecfin/backend/internal/middleware"
+	"github.com/go-pdf/fpdf"
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 )
@@ -70,8 +72,8 @@ func (h *CommunityWalletExportHandler) Export(w http.ResponseWriter, r *http.Req
 	if format == "" {
 		format = "csv"
 	}
-	if format != "csv" && format != "xlsx" {
-		http.Error(w, "formato inválido: usar 'csv' o 'xlsx'", http.StatusBadRequest)
+	if format != "csv" && format != "xlsx" && format != "pdf" {
+		http.Error(w, "formato inválido: usar 'csv', 'xlsx' o 'pdf'", http.StatusBadRequest)
 		return
 	}
 
@@ -103,6 +105,8 @@ func (h *CommunityWalletExportHandler) Export(w http.ResponseWriter, r *http.Req
 		h.exportCSV(w, rows)
 	case "xlsx":
 		h.exportExcel(w, rows)
+	case "pdf":
+		h.exportPDF(w, rows)
 	}
 }
 
@@ -164,6 +168,53 @@ func (h *CommunityWalletExportHandler) exportExcel(w http.ResponseWriter, rows [
 	if err := f.Write(w); err != nil {
 		http.Error(w, "error generando excel", http.StatusInternalServerError)
 	}
+}
+
+func (h *CommunityWalletExportHandler) exportPDF(w http.ResponseWriter, rows []walletExportRow) {
+	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf.SetAutoPageBreak(true, 20)
+	pdf.AddPage()
+
+	// Header
+	pdf.SetFont("Arial", "B", 18)
+	pdf.Cell(0, 12, "Wallets de la Comunidad")
+	pdf.Ln(14)
+
+	pdf.SetFont("Arial", "", 11)
+	pdf.Cell(0, 7, fmt.Sprintf("Total de activos: %d", len(rows)))
+	pdf.Ln(12)
+
+	// Table header
+	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFillColor(0, 173, 216)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.CellFormat(60, 8, "Wallet", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(50, 8, "Ticker", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(50, 8, "Cantidad", "1", 1, "C", true, 0, "")
+
+	// Table rows
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(0, 0, 0)
+	for _, row := range rows {
+		pdf.CellFormat(60, 7, row.WalletName, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(50, 7, row.Ticker, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(50, 7, strconv.FormatFloat(row.Quantity, 'f', 4, 64), "1", 1, "R", false, 0, "")
+	}
+
+	// Footer
+	pdf.Ln(10)
+	pdf.SetFont("Arial", "I", 8)
+	pdf.Cell(0, 5, "Generado por VecFin")
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		http.Error(w, "error generando PDF", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=community_wallets.pdf")
+	w.Write(buf.Bytes())
 }
 
 // ListWallets devuelve las wallets vinculadas a la comunidad.
