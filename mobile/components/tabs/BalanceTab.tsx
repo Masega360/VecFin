@@ -97,7 +97,7 @@ export default function BalanceTab() {
           </View>
           <Text style={styles.tierInfo}>
             {balance?.is_premium
-              ? `Mensajes hasta ${balance.max_message_length} chars`
+              ? `Msgs hasta ${balance.max_message_length} chars · ${balance?.free_tokens_remaining ?? 0} usos gratis restantes`
               : `${balance?.free_tokens_remaining ?? 0} usos gratuitos restantes`
             }
           </Text>

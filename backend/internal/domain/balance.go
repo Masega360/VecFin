@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Free tier: 5000 tokens gratuitos para empezar
-const FreeTokensDefault = 5000
+// Free tier: 10 mensajes gratuitos para empezar
+const FreeTokensDefault = 10
 
 // Premium: mensajes más largos (4000 chars vs 500 free)
 const (

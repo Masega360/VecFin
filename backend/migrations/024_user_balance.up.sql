@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS user_balance (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     balance_usd NUMERIC(12, 6) NOT NULL DEFAULT 0,
-    free_tokens_remaining INTEGER NOT NULL DEFAULT 5000,
+    free_tokens_remaining INTEGER NOT NULL DEFAULT 10,
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
